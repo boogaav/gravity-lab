@@ -149,7 +149,29 @@ function escapeThreshold(): BodySpec[] {
   ];
 }
 
+function sandboxWorld(): BodySpec[] {
+  const M = 1.5e30;
+  const m = 6e24, a = 8e10;
+  const mu = G * (M + m);
+  const vRel = Math.sqrt(mu / a);
+  return toBarycentric([
+    body({ id: 'sol', name: 'Sol', type: 'star', mass: M, radius: 6.5e8, color: '#ffd27a',
+      position: [0, 0, 0], velocity: [0, -vRel * (m / (M + m)), 0] }),
+    body({ id: 'home', name: 'Home', type: 'planet', mass: m, radius: 6.4e6, color: '#6fa8ff',
+      position: [a, 0, 0], velocity: [0, vRel * (M / (M + m)), 0] }),
+  ]);
+}
+
 export const PRESETS: Preset[] = [
+  {
+    id: 'sandbox',
+    name: '0 · Sandbox — drop worlds',
+    description: 'A star and one planet to get you started. Press and hold in empty space to grow a new body (longer hold = more mass, from asteroid to star), drag to aim its velocity, release to launch. Everything obeys the same N-body gravity.',
+    bodies: sandboxWorld(),
+    timeScale: 3e5, collisionMode: 'merge',
+    featuredPair: ['sol', 'home'], defaultFrame: { kind: 'inertial' },
+    predictionDuration: 3e7,
+  },
   {
     id: 'two-body',
     name: '1 · Two-Body Orbit',

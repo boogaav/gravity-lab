@@ -159,6 +159,15 @@ function runPrediction(id: number, duration: number, samples: number, bodies?: B
         emitFrame();
       }
       break;
+    case 'addBody':
+      if (engine) {
+        engine.addBody(msg.body);
+        engine.structureChanged = false;
+        post({ type: 'bodies', specs: engine.syncedSpecs() });
+        emitSnapshot();
+        emitFrame();
+      }
+      break;
     case 'predict':
       runPrediction(msg.id, msg.duration, msg.samples, msg.bodies);
       break;

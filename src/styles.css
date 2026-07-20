@@ -152,6 +152,23 @@ input[type="color"] { width: 28px; height: 24px; padding: 0; border: none; backg
 .collision-item { padding: 2px 0; color: var(--ink-dim); }
 .collision-item b { color: var(--ink); }
 
+/* ---------- sandbox ---------- */
+.sandbox-hint {
+  position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%);
+  background: rgba(8, 13, 26, 0.78); border: 1px solid var(--panel-edge);
+  border-radius: 20px; padding: 8px 18px; color: var(--ink-dim);
+  pointer-events: none; white-space: nowrap; font-size: 12px;
+}
+.sandbox-hint b { color: var(--accent); }
+.btn-lab { margin-left: 8px; }
+.ctl-inline { display: flex; align-items: center; gap: 8px; width: 200px; margin: 0; }
+.ctl-inline span { margin: 0; }
+.drop-label {
+  color: #eaf1ff; font-size: 12px; font-family: inherit; white-space: nowrap;
+  background: rgba(6, 10, 20, 0.7); padding: 2px 8px; border-radius: 5px;
+  transform: translateY(-28px);
+}
+
 /* ---------- 3d labels ---------- */
 .body-label {
   color: #cfe0ff; font-size: 11px; font-family: inherit;

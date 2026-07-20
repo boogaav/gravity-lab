@@ -7,7 +7,8 @@ import { workerClient } from '../state/workerClient';
 import { computeFrameTransform, toFramePos, type FrameTransform } from '../physics/frames';
 import { pairForce } from '../physics/forces';
 import { pairOrbit } from '../physics/orbital';
-import { fmtSpeed } from '../ui/units';
+import { dropFromHold, makeDrop, MAX_HOLD_SEC } from '../physics/drops';
+import { fmtMass, fmtSpeed } from '../ui/units';
 import type { Vec3 } from '../physics/types';
 
 /** Physics XY plane is drawn horizontal: (x,y,z)_phys → (x, z, -y)_three. */
@@ -127,8 +128,8 @@ function BodiesLayer() {
   const dragPlane = useMemo(() => new THREE.Plane(), []);
   const raycaster = useMemo(() => new THREE.Raycaster(), []);
   const beginDrag = (id: string, kind: 'pos' | 'vel', e: ThreeEvent<PointerEvent>) => {
+    e.stopPropagation(); // also shields the sandbox spawn plane behind this body
     if (started) return;
-    e.stopPropagation();
     dragState.current = { id, kind };
     const spec = useStore.getState().specs.find((b) => b.id === id)!;
     // drag in the horizontal plane through the body (physics XY plane)
@@ -493,6 +494,136 @@ function PredictionGhosts() {
   );
 }
 
+/**
+ * Sandbox spawner: press-and-hold in empty space to grow a drop (log-scale
+ * mass with hold time), drag to aim its launch velocity, release to inject it
+ * into the LIVE worker simulation. Pure input → BodySpec; the physics engine
+ * treats drops exactly like any other body.
+ */
+const VEL_PER_SCENE_UNIT = 6000; // m/s of launch speed per scene unit of drag
+const MAX_LAUNCH_SPEED = 8e4; // m/s
+
+function SandboxSpawner() {
+  const mode = useStore((s) => s.mode);
+  const sceneScale = useStore((s) => s.sceneScale);
+  const radiusScale = useStore((s) => s.config.radiusScale);
+  const { camera, gl, controls } = useThree();
+  const stateRef = useRef<{ start: number; pos: THREE.Vector3; cur: THREE.Vector3 } | null>(null);
+  const [drag, setDrag] = useState<null | { pos: [number, number, number]; cur: [number, number, number]; hold: number }>(null);
+  const plane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), []);
+  const raycaster = useMemo(() => new THREE.Raycaster(), []);
+
+  useEffect(() => {
+    const el = gl.domElement;
+    const project = (ev: PointerEvent): THREE.Vector3 | null => {
+      const rect = el.getBoundingClientRect();
+      const ndc = new THREE.Vector2(
+        ((ev.clientX - rect.left) / rect.width) * 2 - 1,
+        -((ev.clientY - rect.top) / rect.height) * 2 + 1,
+      );
+      raycaster.setFromCamera(ndc, camera);
+      const hit = new THREE.Vector3();
+      return raycaster.ray.intersectPlane(plane, hit) ? hit : null;
+    };
+    const move = (ev: PointerEvent) => {
+      const s = stateRef.current;
+      if (!s) return;
+      const hit = project(ev);
+      if (hit) s.cur.copy(hit);
+    };
+    const up = () => {
+      const s = stateRef.current;
+      if (!s) return;
+      stateRef.current = null;
+      setDrag(null);
+      if (controls) (controls as any).enabled = true;
+      const hold = (performance.now() - s.start) / 1000;
+      const posPhys = sceneToPhys(s.pos, sceneScale);
+      const deltaScene = s.cur.clone().sub(s.pos);
+      let velPhys = sceneToPhys(deltaScene, VEL_PER_SCENE_UNIT);
+      const speed = Math.hypot(...velPhys);
+      if (speed > MAX_LAUNCH_SPEED) {
+        velPhys = velPhys.map((v) => (v * MAX_LAUNCH_SPEED) / speed) as Vec3;
+      }
+      actions.spawnBody(makeDrop(hold, posPhys, velPhys));
+    };
+    el.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    return () => {
+      el.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+  }, [camera, gl, controls, plane, raycaster, sceneScale]);
+
+  useFrame(() => {
+    const s = stateRef.current;
+    if (!s) return;
+    setDrag({
+      pos: [s.pos.x, s.pos.y, s.pos.z],
+      cur: [s.cur.x, s.cur.y, s.cur.z],
+      hold: (performance.now() - s.start) / 1000,
+    });
+  });
+
+  if (mode !== 'sandbox') return null;
+
+  let preview = null;
+  if (drag) {
+    const tier = dropFromHold(drag.hold);
+    const visR = Math.max((tier.radius * radiusScale) / sceneScale, 0.12 + 0.4 * Math.min(drag.hold / MAX_HOLD_SEC, 1));
+    const dx = drag.cur[0] - drag.pos[0];
+    const dz = drag.cur[2] - drag.pos[2];
+    const speed = Math.min(Math.hypot(dx, dz) * VEL_PER_SCENE_UNIT, MAX_LAUNCH_SPEED);
+    preview = (
+      <group>
+        <mesh position={drag.pos}>
+          <sphereGeometry args={[visR, 24, 24]} />
+          <meshStandardMaterial
+            color={tier.color}
+            emissive={tier.color}
+            emissiveIntensity={tier.type === 'star' ? 1.2 : 0.35}
+            transparent
+            opacity={0.9}
+          />
+        </mesh>
+        <mesh position={drag.pos} rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[visR * 1.25, visR * 1.32, 48]} />
+          <meshBasicMaterial color="#ffffff" transparent opacity={0.5} side={THREE.DoubleSide} />
+        </mesh>
+        {speed > 100 && (
+          <Line points={[drag.pos, drag.cur]} color="#ffffff" lineWidth={1.6} dashed dashSize={0.16} gapSize={0.1} />
+        )}
+        <Html position={drag.pos} distanceFactor={30} style={{ pointerEvents: 'none' }}>
+          <div className="drop-label">
+            <b>{tier.label}</b> · {fmtMass(tier.mass)}
+            {speed > 100 ? <> · launch {fmtSpeed(speed)}</> : <> · drag to aim</>}
+          </div>
+        </Html>
+      </group>
+    );
+  }
+
+  return (
+    <group>
+      {/* invisible spawn plane in the physics XY plane (horizontal on screen) */}
+      <mesh
+        rotation={[-Math.PI / 2, 0, 0]}
+        onPointerDown={(e: ThreeEvent<PointerEvent>) => {
+          if (e.button !== 0) return;
+          e.stopPropagation();
+          if (controls) (controls as any).enabled = false;
+          const p = new THREE.Vector3(e.point.x, 0, e.point.z);
+          stateRef.current = { start: performance.now(), pos: p, cur: p.clone() };
+        }}
+      >
+        <planeGeometry args={[4000, 4000]} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+      </mesh>
+      {preview}
+    </group>
+  );
+}
+
 function CameraRig() {
   const sceneEpoch = useStore((s) => s.sceneEpoch);
   const { camera } = useThree();
@@ -523,6 +654,7 @@ export default function Scene() {
       {showGrid && (
         <gridHelper args={[80, 40, '#1b2740', '#0e1524']} position={[0, -0.001, 0]} />
       )}
+      <SandboxSpawner />
       <BodiesLayer />
       <Trails />
       <ComMarker />

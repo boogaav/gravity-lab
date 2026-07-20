@@ -191,6 +191,18 @@ export class Engine {
     }
   }
 
+  /**
+   * Inject a new body into the RUNNING simulation (sandbox drops). Time is
+   * preserved; the conservation baselines rebase because adding external
+   * mass/energy is a physical change to the system, not numerical error.
+   */
+  addBody(spec: BodySpec): void {
+    const t = this.time;
+    this.setBodies([...this.syncedSpecs(), spec]);
+    this.time = t;
+    this.structureChanged = true;
+  }
+
   /** Detect and resolve contacts using REAL physical radii. Returns true if sim should stop. */
   private handleCollisions(): boolean {
     let rescan = true;

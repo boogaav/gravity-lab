@@ -4,7 +4,48 @@ import { PRESETS } from '../physics/presets';
 import { frameLabel, type FrameSel } from '../physics/frames';
 import { fmtTime } from '../ui/units';
 
+function SandboxBar() {
+  const running = useStore((s) => s.running);
+  const config = useStore((s) => s.config);
+  const liveSpecs = useStore((s) => s.liveSpecs);
+  const liveTick = useStore((s) => s.liveTick);
+  void liveTick;
+  const f = workerClient.latest;
+  return (
+    <div className="topbar">
+      <div className="brand">
+        <span className="brand-name">GRAVITY LAB</span>
+        <span className="brand-sub">real N-body gravity · nothing scripted</span>
+      </div>
+      <div className="transport">
+        <button className="btn" onClick={() => (running ? actions.pause() : actions.play())}>
+          {running ? '⏸ Pause' : '▶ Play'}
+        </button>
+        <button className="btn" onClick={actions.reset} title="Clear your drops and restart">↺ Clear</button>
+      </div>
+      <label className="ctl ctl-inline">
+        <span>speed</span>
+        <input
+          type="range" min={3} max={7} step={0.05}
+          value={Math.log10(config.timeScale)}
+          onChange={(e) => actions.setConfig({ timeScale: Math.pow(10, Number(e.target.value)) })}
+        />
+      </label>
+      <div className="clock">
+        {liveSpecs.length} bodies · t = {f ? fmtTime(f.time) : '—'}
+        {f && Math.abs(f.diag.energyDrift) > 1e-4 && (
+          <span className="chip chip-warn">⚠ numerical drift</span>
+        )}
+      </div>
+      <button className="btn btn-lab" onClick={() => actions.setMode('lab')} title="Full scientific interface: measurements, charts, reference frames, validation">
+        🔬 Open full lab
+      </button>
+    </div>
+  );
+}
+
 export default function TopBar() {
+  const mode = useStore((s) => s.mode);
   const running = useStore((s) => s.running);
   const presetId = useStore((s) => s.presetId);
   const presetName = useStore((s) => s.presetName);
@@ -37,12 +78,17 @@ export default function TopBar() {
 
   const slowedDown = f && running && f.effTimeScale < config.timeScale * 0.9;
 
+  if (mode === 'sandbox') return <SandboxBar />;
+
   return (
     <div className="topbar">
       <div className="brand">
         <span className="brand-name">GRAVITY LAB</span>
         <span className="brand-sub">Newtonian N-body · Yoshida-4 symplectic · double precision</span>
       </div>
+      <button className="btn" onClick={() => actions.setMode('sandbox')} title="Minimal mode: press & hold to drop new bodies">
+        💧 Sandbox
+      </button>
       <select
         className="preset-select"
         value={presetId}

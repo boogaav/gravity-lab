@@ -56,7 +56,10 @@ export interface UIConfig {
   predictionDuration: number; // s
 }
 
+export type UIMode = 'sandbox' | 'lab';
+
 interface StoreState {
+  mode: UIMode;
   presetId: string;
   presetName: string;
   presetDescription: string;
@@ -148,6 +151,7 @@ function workerConfig(c: UIConfig) {
 }
 
 export const useStore = create<StoreState>(() => ({
+  mode: 'sandbox',
   presetId: '',
   presetName: '',
   presetDescription: '',
@@ -263,6 +267,19 @@ export const actions = {
       predictionDuration: p.predictionDuration,
       variationLabel: p.variation.label,
     });
+  },
+
+  setMode(mode: UIMode) {
+    useStore.setState({ mode });
+  },
+
+  /**
+   * Drop a new body into the LIVE simulation (sandbox). The worker injects it
+   * at the current sim time; conservation baselines rebase (adding external
+   * mass/energy is a physical change, not numerical error).
+   */
+  spawnBody(spec: BodySpec) {
+    workerClient.send({ type: 'addBody', body: spec });
   },
 
   play() {

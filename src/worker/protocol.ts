@@ -17,6 +17,7 @@ export type MainToWorker =
   | { type: 'singleStep' } // exactly one physics substep
   | { type: 'setConfig'; config: Partial<WorkerSimConfig> }
   | { type: 'restore'; snapshot: { time: number; specs: BodySpec[]; stopped: boolean } }
+  | { type: 'addBody'; body: BodySpec }
   | { type: 'predict'; id: number; duration: number; samples: number; bodies?: BodySpec[] }
   | { type: 'requestFrame' };
 
