@@ -773,7 +773,7 @@ export default function Scene() {
   return (
     <Canvas
       dpr={[1, 2]}
-      gl={{ antialias: true, logarithmicDepthBuffer: true }}
+      gl={{ antialias: true, logarithmicDepthBuffer: true, preserveDrawingBuffer: true }}
       camera={{ fov: 45, near: 0.01, far: 5000 }}
       style={{ background: '#04060c' }}
       onPointerMissed={() => actions.select(null)}

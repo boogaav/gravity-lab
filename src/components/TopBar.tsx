@@ -1,8 +1,65 @@
+import { useEffect, useState } from 'react';
 import { useStore, actions } from '../state/store';
 import { workerClient } from '../state/workerClient';
 import { PRESETS } from '../physics/presets';
 import { frameLabel, type FrameSel } from '../physics/frames';
 import { fmtTime } from '../ui/units';
+import { isRecording, shareApp, startRecording, stopRecording, takeScreenshot } from '../ui/capture';
+
+function CaptureButtons() {
+  const [recSec, setRecSec] = useState<number | null>(null);
+  const [toast, setToast] = useState('');
+  const flash = (m: string) => {
+    setToast(m);
+    window.setTimeout(() => setToast(''), 2500);
+  };
+  const recording = recSec !== null;
+  useEffect(() => {
+    if (!recording) return;
+    const id = window.setInterval(() => setRecSec((s) => (s === null ? null : s + 1)), 1000);
+    return () => window.clearInterval(id);
+  }, [recording]);
+  return (
+    <>
+      <button
+        className="btn"
+        title="Save a PNG of the current view"
+        onClick={async () => flash((await takeScreenshot()) ? 'screenshot saved' : 'screenshot failed')}
+      >
+        📷 Shot
+      </button>
+      <button
+        className={recording ? 'btn btn-rec' : 'btn'}
+        title={recording ? 'Stop and save the video' : 'Record the scene to a video file'}
+        onClick={() => {
+          if (recording) {
+            stopRecording();
+            setRecSec(null);
+            flash('video saved');
+          } else if (startRecording()) {
+            setRecSec(0);
+          } else {
+            flash('recording not supported here');
+          }
+        }}
+      >
+        {recording ? `⏹ ${recSec}s` : '⏺ Rec'}
+      </button>
+      <button
+        className="btn"
+        title="Share Gravity Lab"
+        onClick={async () => {
+          const r = await shareApp();
+          if (r === 'copied') flash('link copied ✓');
+          else if (r === 'failed') flash('sharing unavailable');
+        }}
+      >
+        ↗ Share
+      </button>
+      {toast && <span className="chip chip-var">{toast}</span>}
+    </>
+  );
+}
 
 function SandboxBar() {
   const running = useStore((s) => s.running);
@@ -22,6 +79,7 @@ function SandboxBar() {
           {running ? '⏸ Pause' : '▶ Play'}
         </button>
         <button className="btn" onClick={actions.reset} title="Clear your drops and restart">↺ Clear</button>
+        <CaptureButtons />
       </div>
       <label className="ctl ctl-inline">
         <span>speed</span>
