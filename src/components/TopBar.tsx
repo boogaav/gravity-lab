@@ -5,6 +5,27 @@ import { PRESETS } from '../physics/presets';
 import { frameLabel, type FrameSel } from '../physics/frames';
 import { fmtTime } from '../ui/units';
 import { isRecording, shareApp, startRecording, stopRecording, takeScreenshot } from '../ui/capture';
+import { currentTrack, setTrack, TRACK_LABELS, type TrackId } from '../ui/music';
+
+function MusicPicker() {
+  const [track, setTrackState] = useState<TrackId>(() => currentTrack());
+  return (
+    <select
+      className="music-select"
+      value={track}
+      title="Optional generated piano soundtrack (ambience only — not physics sonification)"
+      onChange={(e) => {
+        const id = e.target.value as TrackId;
+        setTrackState(id);
+        setTrack(id);
+      }}
+    >
+      {TRACK_LABELS.map((t) => (
+        <option key={t.id} value={t.id}>{t.label}</option>
+      ))}
+    </select>
+  );
+}
 
 function CaptureButtons() {
   const [recSec, setRecSec] = useState<number | null>(null);
@@ -80,6 +101,7 @@ function SandboxBar() {
         </button>
         <button className="btn" onClick={actions.reset} title="Clear your drops and restart">↺ Clear</button>
         <CaptureButtons />
+        <MusicPicker />
       </div>
       <label className="ctl ctl-inline">
         <span>speed</span>
@@ -163,6 +185,7 @@ export default function TopBar() {
         </button>
         <button className="btn" onClick={actions.singleStep} title="Advance exactly one adaptive physics substep">⏭ Step</button>
         <button className="btn" onClick={actions.reset} title="Restore the exact initial conditions">↺ Reset</button>
+        <MusicPicker />
         {preset?.variation && (
           <button className="btn btn-var" onClick={actions.applyVariation} title={preset.variation.label}>
             ⑂ Vary
