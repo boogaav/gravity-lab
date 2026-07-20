@@ -161,7 +161,17 @@ input[type="color"] { width: 28px; height: 24px; padding: 0; border: none; backg
 }
 .sandbox-hint b { color: var(--accent); }
 .btn-lab { margin-left: 8px; }
-.music-select { max-width: 190px; }
+.music-group {
+  display: flex; align-items: center; gap: 4px;
+  border: 1px solid var(--panel-edge); border-radius: 8px;
+  padding: 3px 8px 3px 10px; background: #0d1424;
+}
+.music-icon { color: var(--accent); font-size: 14px; margin-right: 2px; }
+.btn-music { padding: 3px 9px; font-size: 12px; border-color: transparent; }
+.btn-music.active {
+  border-color: var(--accent); color: var(--accent);
+  background: rgba(99, 208, 255, 0.12);
+}
 .btn-rec { border-color: var(--danger); color: var(--danger); animation: rec-pulse 1.2s ease-in-out infinite; }
 @keyframes rec-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
 .btn-rec { border-color: var(--danger); color: var(--danger); animation: rec-pulse 1.2s ease-in-out infinite; }

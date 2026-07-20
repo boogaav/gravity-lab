@@ -5,25 +5,34 @@ import { PRESETS } from '../physics/presets';
 import { frameLabel, type FrameSel } from '../physics/frames';
 import { fmtTime } from '../ui/units';
 import { isRecording, shareApp, startRecording, stopRecording, takeScreenshot } from '../ui/capture';
-import { currentTrack, setTrack, TRACK_LABELS, type TrackId } from '../ui/music';
+import { currentTrack, setTrack, type TrackId } from '../ui/music';
+
+const TRACK_BUTTONS: Array<{ id: TrackId; label: string; hint: string }> = [
+  { id: 'off', label: 'Off', hint: 'No music' },
+  { id: 'elegy', label: 'Elegy', hint: 'Slow & minor — mournful piano arpeggios' },
+  { id: 'tempest', label: 'Tempest', hint: 'Driving 16th-note storm' },
+  { id: 'adrift', label: 'Adrift', hint: 'Sparse, ambient, weightless' },
+];
 
 function MusicPicker() {
   const [track, setTrackState] = useState<TrackId>(() => currentTrack());
   return (
-    <select
-      className="music-select"
-      value={track}
-      title="Optional generated piano soundtrack (ambience only — not physics sonification)"
-      onChange={(e) => {
-        const id = e.target.value as TrackId;
-        setTrackState(id);
-        setTrack(id);
-      }}
-    >
-      {TRACK_LABELS.map((t) => (
-        <option key={t.id} value={t.id}>{t.label}</option>
+    <div className="music-group" title="Optional generated piano soundtrack (ambience only — not physics sonification)">
+      <span className="music-icon">♪</span>
+      {TRACK_BUTTONS.map((t) => (
+        <button
+          key={t.id}
+          className={`btn btn-music ${track === t.id ? 'active' : ''}`}
+          title={t.hint}
+          onClick={() => {
+            setTrackState(t.id);
+            setTrack(t.id);
+          }}
+        >
+          {t.label}
+        </button>
       ))}
-    </select>
+    </div>
   );
 }
 
