@@ -76,7 +76,7 @@ function SandboxBar() {
       </div>
       <div className="transport">
         <button className="btn" onClick={() => (running ? actions.pause() : actions.play())}>
-          {running ? '⏸ Pause' : '▶ Play'}
+          {running ? '⏸ Pause' : '▶ Start'}
         </button>
         <button className="btn" onClick={actions.reset} title="Clear your drops and restart">↺ Clear</button>
         <CaptureButtons />
@@ -159,7 +159,7 @@ export default function TopBar() {
       </select>
       <div className="transport">
         <button className="btn" onClick={() => (running ? actions.pause() : actions.play())}>
-          {running ? '⏸ Pause' : '▶ Play'}
+          {running ? '⏸ Pause' : '▶ Start'}
         </button>
         <button className="btn" onClick={actions.singleStep} title="Advance exactly one adaptive physics substep">⏭ Step</button>
         <button className="btn" onClick={actions.reset} title="Restore the exact initial conditions">↺ Reset</button>
