@@ -40,6 +40,7 @@ export interface CollisionEvent {
   mode: CollisionMode;
   relSpeed: number; // m/s at contact
   impactEnergy: number; // J, kinetic energy in the pair's COM frame at contact
+  position: Vec3; // m, contact point on the line of centers (for illustrative FX only)
 }
 
 export interface Diagnostics {

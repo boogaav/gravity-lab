@@ -121,6 +121,11 @@ Detected against **real physical radii** (never the visual exaggeration). Modes:
 
 No fragmentation is offered because no defensible fragmentation model is implemented.
 
+Merges display a brief flash/ring/spark burst at the computed contact point. This is
+**illustrative rendering only** — it runs on the render thread in wall-clock time and
+feeds nothing back into physics; the scientifically calculated impact state (relative
+speed, dissipated COM-frame kinetic energy, momentum bookkeeping) is in the event log.
+
 ## Prediction, playback, editing
 
 - **Ghost trajectories** integrate a *clone* of the current state in the worker — never a

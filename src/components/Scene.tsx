@@ -494,6 +494,137 @@ function PredictionGhosts() {
   );
 }
 
+// ---------------------------------------------------------------- impact FX
+
+/**
+ * ILLUSTRATIVE explosion burst at a merge's computed contact point. Purely
+ * decorative rendering on the main thread — the scientifically calculated
+ * impact state (relative speed, dissipated COM-frame kinetic energy, momentum
+ * bookkeeping) lives in the event log; nothing here feeds back into physics.
+ */
+interface Fx {
+  key: string;
+  pos: Vec3; // contact point, world meters (from the engine's collision event)
+  born: number; // wall-clock ms — the flash runs in real time, not sim time
+  size: number; // scene units, scaled from log(impact energy)
+  dirs: Float32Array; // unit spark directions
+}
+
+const FX_MS = 1600;
+
+function fxSizeFor(impactEnergy: number): number {
+  const logE = Math.log10(Math.max(impactEnergy, 1));
+  return 0.28 + 0.9 * Math.min(Math.max((logE - 26) / 8, 0), 1);
+}
+
+function makeSparkDirs(n = 36): Float32Array {
+  const arr = new Float32Array(n * 3);
+  let seed = (performance.now() | 0) % 2147483646 + 1;
+  const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < n; i++) {
+    const th = rand() * Math.PI * 2;
+    // bias sparks toward the orbital (horizontal) plane, slight vertical scatter
+    const up = (rand() - 0.5) * 0.5;
+    const norm = Math.hypot(Math.cos(th), up, Math.sin(th));
+    arr[3 * i] = Math.cos(th) / norm;
+    arr[3 * i + 1] = up / norm;
+    arr[3 * i + 2] = Math.sin(th) / norm;
+  }
+  return arr;
+}
+
+function FxItem({ fx, onDone }: { fx: Fx; onDone: (key: string) => void }) {
+  const sceneScale = useStore((s) => s.sceneScale);
+  const group = useRef<THREE.Group>(null);
+  const flash = useRef<THREE.Mesh>(null);
+  const ring = useRef<THREE.Mesh>(null);
+  const sparks = useRef<THREE.Points>(null);
+  const doneRef = useRef(false);
+  const geo = useMemo(() => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(fx.dirs, 3));
+    return g;
+  }, [fx.dirs]);
+
+  useFrame(() => {
+    const p = (performance.now() - fx.born) / FX_MS;
+    if (p >= 1) {
+      if (!doneRef.current) {
+        doneRef.current = true;
+        onDone(fx.key);
+      }
+      return;
+    }
+    const g = group.current;
+    if (!g) return;
+    const { t } = currentTransform();
+    if (t) g.position.set(...physToScene(toFramePos(fx.pos, t), sceneScale));
+    const ease = 1 - Math.pow(1 - p, 3);
+    const s = fx.size;
+    if (flash.current) {
+      flash.current.scale.setScalar(s * (0.3 + 1.7 * ease));
+      (flash.current.material as THREE.MeshBasicMaterial).opacity = Math.pow(1 - p, 2);
+    }
+    if (ring.current) {
+      ring.current.scale.setScalar(s * (0.4 + 3.4 * ease));
+      (ring.current.material as THREE.MeshBasicMaterial).opacity = 0.75 * Math.pow(1 - p, 1.5);
+    }
+    if (sparks.current) {
+      sparks.current.scale.setScalar(s * (0.3 + 2.8 * ease));
+      (sparks.current.material as THREE.PointsMaterial).opacity = 1 - p;
+    }
+  });
+
+  return (
+    <group ref={group}>
+      <mesh ref={flash}>
+        <sphereGeometry args={[1, 16, 16]} />
+        <meshBasicMaterial color="#fff4d6" transparent opacity={1} blending={THREE.AdditiveBlending} depthWrite={false} />
+      </mesh>
+      <mesh ref={ring} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.85, 1, 48]} />
+        <meshBasicMaterial color="#ffb763" transparent opacity={0.75} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} depthWrite={false} />
+      </mesh>
+      <points ref={sparks} geometry={geo}>
+        <pointsMaterial color="#ffd9a0" size={3.2} sizeAttenuation={false} transparent opacity={1} blending={THREE.AdditiveBlending} depthWrite={false} />
+      </points>
+    </group>
+  );
+}
+
+function ImpactFlashes() {
+  const collisions = useStore((s) => s.collisions);
+  const [fx, setFx] = useState<Fx[]>([]);
+  const seen = useRef(0);
+
+  useEffect(() => {
+    if (collisions.length < seen.current) seen.current = 0; // scenario reset
+    if (collisions.length === seen.current) return;
+    const fresh = collisions
+      .slice(seen.current)
+      .filter((c) => c.mode === 'merge' || c.mode === 'stop')
+      .map((c, k) => ({
+        key: `${c.time}-${c.aId}-${c.bId}-${seen.current + k}`,
+        pos: c.position,
+        born: performance.now(),
+        size: fxSizeFor(c.impactEnergy),
+        dirs: makeSparkDirs(),
+      }));
+    seen.current = collisions.length;
+    if (fresh.length) setFx((prev) => [...prev.slice(-8), ...fresh]);
+  }, [collisions]);
+
+  const remove = (key: string) => setFx((prev) => prev.filter((f) => f.key !== key));
+
+  return (
+    <>
+      {fx.map((f) => (
+        <FxItem key={f.key} fx={f} onDone={remove} />
+      ))}
+    </>
+  );
+}
+
 /**
  * Sandbox spawner: press-and-hold in empty space to grow a drop (log-scale
  * mass with hold time), drag to aim its launch velocity, release to inject it
@@ -656,6 +787,7 @@ export default function Scene() {
       )}
       <SandboxSpawner />
       <BodiesLayer />
+      <ImpactFlashes />
       <Trails />
       <ComMarker />
       <ClosestApproachMarker />

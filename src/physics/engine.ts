@@ -223,6 +223,7 @@ export class Engine {
           const relSpeed = Math.hypot(vx, vy, vz);
           const mi = this.mass[i], mj = this.mass[j];
           const redM = (mi * mj) / Math.max(mi + mj, 1e-300);
+          const fr = contact > 0 ? this.radius[i] / contact : 0.5;
           const event: CollisionEvent = {
             time: this.time,
             aId: this.specs[i].id, bId: this.specs[j].id,
@@ -230,6 +231,7 @@ export class Engine {
             mode: this.config.collisionMode,
             relSpeed,
             impactEnergy: 0.5 * redM * relSpeed * relSpeed,
+            position: [this.pos[ix] + fr * dx, this.pos[ix + 1] + fr * dy, this.pos[ix + 2] + fr * dz],
           };
           this.pendingEvents.push(event);
           switch (this.config.collisionMode) {
