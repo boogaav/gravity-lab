@@ -152,6 +152,16 @@ input[type="color"] { width: 28px; height: 24px; padding: 0; border: none; backg
 .collision-item { padding: 2px 0; color: var(--ink-dim); }
 .collision-item b { color: var(--ink); }
 
+/* ---------- contact ---------- */
+.contact-btn {
+  position: absolute; bottom: 58px; left: 14px; z-index: 5;
+  background: rgba(8, 13, 26, 0.78); border: 1px solid var(--panel-edge);
+  border-radius: 20px; padding: 7px 16px;
+  color: var(--ink-dim); text-decoration: none; font-size: 12px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.contact-btn:hover { color: var(--accent); border-color: var(--accent); }
+
 /* ---------- sandbox ---------- */
 .sandbox-hint {
   position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%);

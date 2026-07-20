@@ -26,6 +26,15 @@ export default function App() {
         {!sandbox && <LeftPanel />}
         <div className="viewport">
           <Scene />
+          <a
+            className="contact-btn"
+            href="https://x.com/boogaav"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Contact / connect on X"
+          >
+            ✉ Contact
+          </a>
           {sandbox && (
             <div className="sandbox-hint">
               <b>hold</b> to grow a body &nbsp;·&nbsp; <b>drag</b> to aim &nbsp;·&nbsp; <b>release</b> to launch
