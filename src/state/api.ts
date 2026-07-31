@@ -105,6 +105,12 @@ export const api = {
       body: JSON.stringify(payload),
     }),
 
+  remove: (slug: string, key: string) =>
+    req<{ deleted: boolean; slug: string }>(`/api/worlds/${encodeURIComponent(slug)}`, {
+      method: 'DELETE',
+      body: JSON.stringify({ key }),
+    }),
+
   auth: (slug: string, key: string) =>
     req<{ ok: boolean }>(`/api/worlds/${encodeURIComponent(slug)}/auth`, {
       method: 'POST',

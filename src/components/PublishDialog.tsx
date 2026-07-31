@@ -24,6 +24,7 @@ export default function PublishDialog() {
   const [avail, setAvail] = useState<Availability>('idle');
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [stats, setStats] = useState<WorldStats | null>(null);
   const [thumb, setThumb] = useState<string | null>(null);
   const [frozen, setFrozen] = useState<World | null>(null);
@@ -41,6 +42,7 @@ export default function PublishDialog() {
     }
     setError('');
     setCopied(false);
+    setConfirmDelete(false);
     setThumb(captureThumbnail(640));
     const snapshot = actions.currentWorld();
     setFrozen(snapshot);
@@ -254,6 +256,28 @@ export default function PublishDialog() {
         {error && <p className="warn-text">{error}</p>}
 
         <div className="modal-actions">
+          {isUpdate && (
+            <button
+              className="btn btn-danger-solid"
+              disabled={publishing || !keyOk}
+              title="Permanently remove this world"
+              onClick={async () => {
+                if (confirmDelete) {
+                  setError('');
+                  try {
+                    await actions.deleteWorld(slug, secret.trim());
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : String(err));
+                    setConfirmDelete(false);
+                  }
+                } else {
+                  setConfirmDelete(true);
+                }
+              }}
+            >
+              {confirmDelete ? 'Really delete — this cannot be undone' : '🗑 Delete'}
+            </button>
+          )}
           <button className="btn" disabled={publishing} onClick={() => actions.setPublishOpen(false)}>
             Cancel
           </button>

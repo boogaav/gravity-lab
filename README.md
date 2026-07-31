@@ -39,6 +39,20 @@ chaos value rather than a meaningless one.
 Sharing is also possible with no server at all: a world encodes into a `#w=…` URL
 fragment (deflate-compressed, ~350 characters for a five-body system).
 
+### Owner keys
+
+Publishing requires a **secret key** (generated for you, editable, copyable). It is what
+lets you come back later: holding it unlocks **Update** on `/@name`, which saves the
+current arrangement over the world while keeping its link, likes and view count — and
+**Delete**, behind a two-step confirmation.
+
+The server stores only a scrypt hash with a per-world random salt and compares in
+constant time; key guesses are rate limited per IP. A lost key therefore cannot be
+recovered or reset. For convenience the key is cached in the publishing browser's
+localStorage, so returning on the same device unlocks automatically; anywhere else, the
+`🔑 I own this` prompt accepts the key directly. Worlds published before this feature
+existed report `editable: false` and cannot be modified.
+
 ---
 
 ## Physics model

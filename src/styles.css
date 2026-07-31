@@ -217,7 +217,9 @@ input[type="color"] { width: 28px; height: 24px; padding: 0; border: none; backg
   padding: 20px; width: min(520px, 100%); max-height: 92vh; overflow-y: auto;
 }
 .modal h2 { margin: 0 0 6px; font-size: 16px; color: var(--accent); letter-spacing: 0.06em; }
-.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+.btn-danger-solid { border-color: var(--danger); color: var(--danger); margin-right: auto; }
+.btn-danger-solid:hover { background: rgba(255, 109, 154, 0.12); }
 .field { display: block; margin: 12px 0 4px; }
 .field span { display: block; font-size: 11px; color: var(--ink-dim); margin-bottom: 4px; }
 .field input { width: 100%; padding: 8px 10px; font-size: 14px; }

@@ -334,6 +334,23 @@ app.put('/api/worlds/:slug', async (req, reply) => {
   return { slug, url: `${PUBLIC_URL}/@${slug}`, updated: true };
 });
 
+/** Delete a world. Requires the owner key; irreversible. */
+app.delete('/api/worlds/:slug', async (req, reply) => {
+  const slug = String(req.params.slug || '').toLowerCase();
+  const row = db.prepare('SELECT key_hash, key_salt FROM worlds WHERE slug = ?').get(slug);
+  if (!row) return reply.code(404).send({ error: 'not found' });
+  if (!allowAuthAttempt(hashIp(clientIp(req)))) {
+    return reply.code(429).send({ error: 'Too many attempts — wait a few minutes.' });
+  }
+  if (!row.key_hash) {
+    return reply.code(403).send({ error: 'This world was published without a secret key and cannot be removed.' });
+  }
+  if (!keyMatches(row, req.body?.key)) return reply.code(403).send({ error: 'That secret key does not match.' });
+  db.prepare('DELETE FROM likes WHERE slug = ?').run(slug);
+  db.prepare('DELETE FROM worlds WHERE slug = ?').run(slug);
+  return { deleted: true, slug };
+});
+
 app.get('/api/health', async () => ({
   ok: true,
   worlds: db.prepare('SELECT COUNT(*) AS c FROM worlds').get().c,

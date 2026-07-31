@@ -9,7 +9,7 @@ import { api, type WorldCard } from './api';
 import { decodeWorld, encodeWorld, type World, type WorldConfigSlice } from './worldCodec';
 import { analyzeWorld, type WorldStats } from '../physics/analyze';
 import { captureThumbnail } from '../ui/capture';
-import { recallKey, rememberKey } from './worldKeys';
+import { forgetKey, recallKey, rememberKey } from './worldKeys';
 
 export interface HistoryEntry {
   time: number;
@@ -443,6 +443,14 @@ export const actions = {
     await api.auth(rec.slug, key);
     rememberKey(rec.slug, key);
     useStore.setState({ worldUnlocked: true });
+  },
+
+  /** Permanently remove a published world (requires its owner key). */
+  async deleteWorld(slug: string, key: string) {
+    await api.remove(slug, key);
+    forgetKey(slug);
+    useStore.setState({ worldRecord: null, worldUnlocked: false, publishOpen: false });
+    actions.navigate({ kind: 'leaderboard' });
   },
 
   /** Save the current state over an existing world (requires its owner key). */
