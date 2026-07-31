@@ -109,7 +109,14 @@ function SandboxBar() {
         <button className="btn" onClick={() => (running ? actions.pause() : actions.play())} data-tip-title="Start / Pause" data-tip="Runs or freezes the simulation. Time keeps its exact state when paused — nothing is reset.">
           {running ? '⏸ Pause' : '▶ Start'}
         </button>
-        <button className="btn" onClick={actions.reset} data-tip-title="Clear" data-tip="Wipes every body you dropped and restores the starting star and planet. Your published worlds are untouched.">↺ Clear</button>
+        <button
+          className="btn"
+          onClick={actions.startNewWorld}
+          data-tip-title="Start New"
+          data-tip="Opens a fresh, empty world in a new browser tab — so whatever you have going here stays exactly as it is, and you can bookmark or keep both."
+        >
+          ＋ Start New
+        </button>
         <button
           className="btn btn-primary"
           onClick={() => actions.setPublishOpen(true)}

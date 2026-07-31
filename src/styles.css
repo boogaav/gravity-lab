@@ -48,6 +48,7 @@ html, body, #root {
   background: #101a30; color: var(--ink);
   border: 1px solid var(--panel-edge); border-radius: 6px;
   padding: 5px 10px; cursor: pointer; font: inherit;
+  white-space: nowrap;
 }
 .btn:hover { border-color: var(--accent); color: var(--accent); }
 .btn:disabled { opacity: 0.4; cursor: default; }

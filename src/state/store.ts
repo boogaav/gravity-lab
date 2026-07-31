@@ -322,6 +322,29 @@ export const actions = {
     useStore.setState({ mode });
   },
 
+  /**
+   * Open a fresh world in a new browser tab, leaving the current one intact.
+   * Falls back to starting fresh in place if the browser blocks the popup.
+   */
+  startNewWorld() {
+    const url = actions.routePath({ kind: 'home' });
+    const win = typeof window !== 'undefined' ? window.open(url, '_blank', 'noopener') : null;
+    if (win) return;
+    // popup blocked (or no window): do it here instead
+    actions.navigate({ kind: 'home' });
+    useStore.setState({ worldRecord: null, worldLiked: false, worldUnlocked: false });
+    actions.loadPreset('sandbox');
+    actions.setConfig({
+      radiusScale: 10,
+      showLabels: false,
+      showVelocity: false,
+      showCom: false,
+      trailLength: 800,
+    });
+    actions.select(null);
+    actions.play();
+  },
+
   // ---------------------------------------------------------------- routing
 
   /** Path for a route, honouring the deployment's base path. */
