@@ -779,7 +779,11 @@ function CaptureBridge() {
         // JPEG has no alpha: paint the space background first
         ctx.fillStyle = '#04060c';
         ctx.fillRect(0, 0, off.width, off.height);
+        // Downscaled previews (leaderboard cards) lose thin trails against
+        // black space, so lift them. Full-size screenshots stay untouched.
+        ctx.filter = 'brightness(1.75) saturate(1.15) contrast(1.05)';
         ctx.drawImage(src, 0, 0, off.width, off.height);
+        ctx.filter = 'none';
         return off.toDataURL(mime, quality);
       } catch {
         return null;
