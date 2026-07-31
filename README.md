@@ -1,5 +1,7 @@
 # Gravity Lab
 
+**Live: https://gravity-lab.fly.dev**
+
 An interactive, scientifically honest 3D gravitational N-body simulator for exploring
 close encounters: flybys, gravity assists, binary disruption, chaotic three-body motion,
 collisions, and escape thresholds.
@@ -10,9 +12,32 @@ easing curves, no fixed "anchor" bodies, and no predetermined outcomes.
 
 ```
 npm install
-npm run dev     # http://localhost:5198
+npm run dev     # http://localhost:5198 (frontend only)
 npm test        # headless physics validation suite (Vitest)
+
+# full stack (API + published worlds), from the repo root:
+npx vite build --base=/ && (cd server && npm install) && node server/index.mjs
 ```
+
+## Published worlds
+
+Press-and-hold in the sandbox to grow bodies, then **Publish** to give a world its own
+address at `/@your-world-name`. Anyone opening that link gets the exact initial
+conditions, replayed by the same integrator. `/worlds` lists every published world.
+
+The leaderboard's ranking columns are **measured, not declared**. At publish time the
+world is integrated forward for 200 characteristic orbital periods alongside a twin
+displaced by one part in 10⁹, yielding:
+
+- `chaos` — a finite-time Lyapunov exponent per orbit (~0 regular, >0.3 chaotic)
+- `firstCollision` / `survivors` — when (and whether) bodies actually merge
+- `escapees` — bodies on unbound outbound trajectories at the end
+
+See `src/physics/analyze.ts`. Worlds that merge before a full dynamical time report no
+chaos value rather than a meaningless one.
+
+Sharing is also possible with no server at all: a world encodes into a `#w=…` URL
+fragment (deflate-compressed, ~350 characters for a five-body system).
 
 ---
 
@@ -183,14 +208,22 @@ residual is physical (the Sun perturbs the encounter), not numerical.
 
 ```
 src/physics/    constants, forces, integrator (Yoshida-4), engine (adaptive stepping,
-                collisions), diagnostics, orbital elements, reference frames, presets
+                collisions), diagnostics, orbital elements, reference frames, presets,
+                analyze (measured world statistics for the leaderboard)
 src/worker/     physics worker + typed message protocol (integration off the UI thread)
-src/state/      worker client (60 fps mutable frame slot) + zustand store (10 Hz panels)
-src/components/ R3F scene (bodies, trails, vectors, markers, asymptotes, drag handles),
-                top bar, left editor panel, right measurement panel, charts/scrubber
+src/state/      worker client (60 fps mutable frame slot), zustand store + router,
+                world codec (compact URL-safe serialization), registry API client
+src/components/ R3F scene (bodies, trails, vectors, markers, asymptotes, drag handles,
+                sandbox spawner, impact FX), top bar, editor/measurement panels,
+                charts/scrubber, publish dialog, leaderboard, world bar
 src/validation/ shared accuracy suite (in-app panel + Vitest)
-tests/          Vitest entry
+server/         Fastify + SQLite registry; serves the SPA and injects per-world
+                OpenGraph tags on /@slug so shared links preview correctly
+tests/          Vitest entries (physics validation + codec/analyzer)
 ```
+
+Deployment: a single Fly.io app (`fly.toml`, `Dockerfile`) serving both the static build
+and the API, with SQLite on a mounted volume at `/data`.
 
 Stack: TypeScript, React 18, Three.js via React-Three-Fiber, zustand, Vite, Vitest.
 Charts are hand-rolled SVG. No physics library is used; the integrator is ~40 lines and

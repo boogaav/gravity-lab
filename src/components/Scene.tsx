@@ -9,6 +9,7 @@ import { pairForce } from '../physics/forces';
 import { pairOrbit } from '../physics/orbital';
 import { dropFromHold, makeDrop, MAX_HOLD_SEC } from '../physics/drops';
 import { fmtMass, fmtSpeed } from '../ui/units';
+import { registerRenderCapture } from '../ui/capture';
 import type { Vec3 } from '../physics/types';
 
 /** Physics XY plane is drawn horizontal: (x,y,z)_phys → (x, z, -y)_three. */
@@ -755,6 +756,40 @@ function SandboxSpawner() {
   );
 }
 
+/**
+ * Bridges the WebGL renderer to the capture helpers: re-renders the current
+ * frame and reads it back immediately, which stays valid even though the
+ * drawing buffer is not preserved between composites.
+ */
+function CaptureBridge() {
+  const { gl, scene, camera } = useThree();
+  useEffect(() => {
+    registerRenderCapture((mime, quality, maxWidth) => {
+      try {
+        gl.render(scene, camera);
+        const src = gl.domElement;
+        if (!src.width || !src.height) return null;
+        const scale = maxWidth ? Math.min(1, maxWidth / src.width) : 1;
+        if (scale === 1) return src.toDataURL(mime, quality);
+        const off = document.createElement('canvas');
+        off.width = Math.max(1, Math.round(src.width * scale));
+        off.height = Math.max(1, Math.round(src.height * scale));
+        const ctx = off.getContext('2d');
+        if (!ctx) return null;
+        // JPEG has no alpha: paint the space background first
+        ctx.fillStyle = '#04060c';
+        ctx.fillRect(0, 0, off.width, off.height);
+        ctx.drawImage(src, 0, 0, off.width, off.height);
+        return off.toDataURL(mime, quality);
+      } catch {
+        return null;
+      }
+    });
+    return () => registerRenderCapture(null);
+  }, [gl, scene, camera]);
+  return null;
+}
+
 function CameraRig() {
   const sceneEpoch = useStore((s) => s.sceneEpoch);
   const { camera } = useThree();
@@ -793,6 +828,7 @@ export default function Scene() {
       <ClosestApproachMarker />
       <Asymptotes />
       <PredictionGhosts />
+      <CaptureBridge />
       <CameraRig />
     </Canvas>
   );

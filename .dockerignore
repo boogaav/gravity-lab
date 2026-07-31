@@ -1,0 +1,9 @@
+# Never ship host-built artifacts into the image: the server's native modules
+# (better-sqlite3) must be the ones compiled inside the Linux build stage.
+node_modules
+server/node_modules
+dist
+.data
+.git
+.gitignore
+*.md

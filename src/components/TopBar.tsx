@@ -109,6 +109,20 @@ function SandboxBar() {
           {running ? '⏸ Pause' : '▶ Start'}
         </button>
         <button className="btn" onClick={actions.reset} title="Clear your drops and restart">↺ Clear</button>
+        <button
+          className="btn btn-primary"
+          onClick={() => actions.setPublishOpen(true)}
+          title="Give this world its own link and put it on the leaderboard"
+        >
+          🌍 Publish
+        </button>
+        <button
+          className="btn"
+          onClick={() => actions.navigate({ kind: 'leaderboard' })}
+          title="Browse every published world"
+        >
+          ☰ Worlds
+        </button>
         <CaptureButtons />
         <MusicPicker />
       </div>
@@ -194,6 +208,12 @@ export default function TopBar() {
         </button>
         <button className="btn" onClick={actions.singleStep} title="Advance exactly one adaptive physics substep">⏭ Step</button>
         <button className="btn" onClick={actions.reset} title="Restore the exact initial conditions">↺ Reset</button>
+        <button className="btn btn-primary" onClick={() => actions.setPublishOpen(true)} title="Publish this world">
+          🌍 Publish
+        </button>
+        <button className="btn" onClick={() => actions.navigate({ kind: 'leaderboard' })} title="Browse published worlds">
+          ☰ Worlds
+        </button>
         <MusicPicker />
         {preset?.variation && (
           <button className="btn btn-var" onClick={actions.applyVariation} title={preset.variation.label}>

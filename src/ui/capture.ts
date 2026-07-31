@@ -1,6 +1,7 @@
 /** Canvas screenshot / screen-record / share helpers (UI only — no physics involvement). */
 
-const APP_URL = 'https://boogaav.github.io/gravity-lab/';
+import { SITE_ORIGIN } from '../state/api';
+
 const SHARE_TEXT = 'Gravity Lab — a real N-body gravity sandbox. Drop planets, slingshot spacecraft, feed the star.';
 
 function stamp(): string {
@@ -19,12 +20,40 @@ function sceneCanvas(): HTMLCanvasElement | null {
   return document.querySelector('canvas');
 }
 
+/**
+ * Renderer bridge registered by the 3D scene. WebGL clears its drawing buffer
+ * after each composite, so a plain `toDataURL` on the live canvas can come back
+ * blank; this re-renders the frame and reads it back within the same task.
+ */
+type RenderCapture = (mime: string, quality: number, maxWidth?: number) => string | null;
+let renderCapture: RenderCapture | null = null;
+
+export function registerRenderCapture(fn: RenderCapture | null): void {
+  renderCapture = fn;
+}
+
+function dataUrlToBlob(dataUrl: string): Blob | null {
+  const m = /^data:([^;]+);base64,(.*)$/.exec(dataUrl);
+  if (!m) return null;
+  const bin = atob(m[2]);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type: m[1] });
+}
+
 function canvasBlob(type = 'image/png'): Promise<Blob | null> {
+  const viaRenderer = renderCapture?.(type, 0.92);
+  if (viaRenderer) return Promise.resolve(dataUrlToBlob(viaRenderer));
   return new Promise((resolve) => {
     const c = sceneCanvas();
     if (!c) return resolve(null);
     c.toBlob((b) => resolve(b), type);
   });
+}
+
+/** Small JPEG data URL of the current view, used as a published world's thumbnail. */
+export function captureThumbnail(maxWidth = 640): string | null {
+  return renderCapture?.('image/jpeg', 0.82, maxWidth) ?? null;
 }
 
 export async function takeScreenshot(): Promise<boolean> {
@@ -75,7 +104,10 @@ export function stopRecording(): void {
 
 export type ShareResult = 'shared' | 'copied' | 'failed';
 
-export async function shareApp(): Promise<ShareResult> {
+export async function shareApp(opts?: { url?: string; title?: string; text?: string }): Promise<ShareResult> {
+  const url = opts?.url ?? SITE_ORIGIN;
+  const title = opts?.title ?? 'Gravity Lab';
+  const text = opts?.text ?? SHARE_TEXT;
   // best case: native share sheet with a live snapshot attached
   try {
     if (navigator.share) {
@@ -83,11 +115,11 @@ export async function shareApp(): Promise<ShareResult> {
       if (blob) {
         const file = new File([blob], 'gravity-lab.png', { type: 'image/png' });
         if (navigator.canShare?.({ files: [file] })) {
-          await navigator.share({ title: 'Gravity Lab', text: SHARE_TEXT, url: APP_URL, files: [file] });
+          await navigator.share({ title, text, url, files: [file] });
           return 'shared';
         }
       }
-      await navigator.share({ title: 'Gravity Lab', text: SHARE_TEXT, url: APP_URL });
+      await navigator.share({ title, text, url });
       return 'shared';
     }
   } catch (err) {
@@ -95,11 +127,11 @@ export async function shareApp(): Promise<ShareResult> {
     // fall through to clipboard
   }
   try {
-    await navigator.clipboard.writeText(APP_URL);
+    await navigator.clipboard.writeText(url);
     return 'copied';
   } catch {
     // last resort: a selectable prompt works even where share/clipboard are blocked
-    window.prompt('Copy the link to share Gravity Lab:', APP_URL);
+    window.prompt('Copy this link to share:', url);
     return 'shared';
   }
 }

@@ -5,6 +5,10 @@ import { PRESETS, getPreset } from '../physics/presets';
 import { pairOrbit, analyticDeflection } from '../physics/orbital';
 import type { ValidationResult } from '../validation/suite';
 import { workerClient } from './workerClient';
+import { api, type WorldCard } from './api';
+import { decodeWorld, encodeWorld, type World, type WorldConfigSlice } from './worldCodec';
+import { analyzeWorld, type WorldStats } from '../physics/analyze';
+import { captureThumbnail } from '../ui/capture';
 
 export interface HistoryEntry {
   time: number;
@@ -58,8 +62,21 @@ export interface UIConfig {
 
 export type UIMode = 'sandbox' | 'lab';
 
+export type Route =
+  | { kind: 'home' }
+  | { kind: 'world'; slug: string }
+  | { kind: 'leaderboard' };
+
 interface StoreState {
   mode: UIMode;
+  route: Route;
+  /** Metadata of the published world currently on screen (null when improvising). */
+  worldRecord: WorldCard | null;
+  worldLiked: boolean;
+  worldLoading: boolean;
+  worldError: string | null;
+  publishOpen: boolean;
+  publishing: boolean;
   presetId: string;
   presetName: string;
   presetDescription: string;
@@ -89,6 +106,21 @@ interface StoreState {
 }
 
 const DRIFT_WARN = 1e-4; // configurable threshold: warn above 0.01% energy drift
+
+/** Deployment base path ('/' on the app host, '/gravity-lab/' on the static mirror). */
+export const BASE_PATH: string = (import.meta as any).env?.BASE_URL ?? '/';
+
+export function parseRoute(pathname: string): Route {
+  let p = pathname;
+  if (BASE_PATH !== '/') {
+    if (p.startsWith(BASE_PATH)) p = '/' + p.slice(BASE_PATH.length);
+    else if (p === BASE_PATH.replace(/\/$/, '')) p = '/';
+  }
+  const m = /^\/@([a-z0-9-]{2,32})\/?$/i.exec(p);
+  if (m) return { kind: 'world', slug: m[1].toLowerCase() };
+  if (/^\/worlds\/?$/.test(p)) return { kind: 'leaderboard' };
+  return { kind: 'home' };
+}
 
 function defaultConfig(): UIConfig {
   return {
@@ -152,6 +184,13 @@ function workerConfig(c: UIConfig) {
 
 export const useStore = create<StoreState>(() => ({
   mode: 'sandbox',
+  route: { kind: 'home' },
+  worldRecord: null,
+  worldLiked: false,
+  worldLoading: false,
+  worldError: null,
+  publishOpen: false,
+  publishing: false,
   presetId: '',
   presetName: '',
   presetDescription: '',
@@ -271,6 +310,207 @@ export const actions = {
 
   setMode(mode: UIMode) {
     useStore.setState({ mode });
+  },
+
+  // ---------------------------------------------------------------- routing
+
+  /** Path for a route, honouring the deployment's base path. */
+  routePath(route: Route): string {
+    const base = BASE_PATH;
+    if (route.kind === 'world') return `${base}@${route.slug}`;
+    if (route.kind === 'leaderboard') return `${base}worlds`;
+    return base;
+  },
+
+  navigate(route: Route, opts: { replace?: boolean } = {}) {
+    const path = actions.routePath(route);
+    if (typeof history !== 'undefined') {
+      if (opts.replace) history.replaceState({}, '', path);
+      else history.pushState({}, '', path);
+    }
+    actions.applyRoute(route);
+  },
+
+  /** React to a route without touching history (initial load and popstate). */
+  applyRoute(route: Route) {
+    const prev = useStore.getState().route;
+    useStore.setState({ route, worldError: null });
+    if (route.kind === 'world') {
+      if (prev.kind !== 'world' || prev.slug !== route.slug || !useStore.getState().worldRecord) {
+        void actions.openWorld(route.slug);
+      }
+    } else if (route.kind === 'home' && prev.kind === 'world') {
+      useStore.setState({ worldRecord: null, worldLiked: false });
+    }
+  },
+
+  /** Parse the current URL into a route. Also handles `#w=` ad-hoc world codes. */
+  async bootRouting() {
+    if (typeof location === 'undefined') return;
+    const hash = /[#&]w=([A-Za-z0-9_-]+)/.exec(location.hash);
+    if (hash) {
+      const world = await decodeWorld(hash[1]);
+      if (world) {
+        actions.applyWorld(world, 'Shared world');
+        useStore.setState({ route: { kind: 'home' } });
+        return true;
+      }
+    }
+    actions.applyRoute(parseRoute(location.pathname));
+    return false;
+  },
+
+  // ---------------------------------------------------------------- worlds
+
+  /** Load bodies + presentation settings from a decoded world into the sim. */
+  applyWorld(world: World, title = 'Shared world', description = '') {
+    const s = useStore.getState();
+    const config: UIConfig = { ...s.config, ...world.config };
+    useStore.setState({ config });
+    actions.loadBodies(world.bodies, {
+      presetId: 'custom',
+      name: title,
+      description,
+      timeScale: world.config.timeScale,
+      collisionMode: world.config.collisionMode,
+    });
+    useStore.setState({ config });
+    workerClient.send({ type: 'setConfig', config: workerConfig(config) });
+    actions.select(null);
+    actions.play();
+  },
+
+  async openWorld(slug: string) {
+    useStore.setState({ worldLoading: true, worldError: null });
+    try {
+      const rec = await api.get(slug);
+      const world = await decodeWorld(rec.data);
+      if (!world) throw new Error('This world could not be decoded.');
+      actions.applyWorld(world, rec.title, rec.author ? `by ${rec.author}` : '');
+      useStore.setState({
+        worldRecord: rec,
+        worldLiked: rec.liked,
+        worldLoading: false,
+        route: { kind: 'world', slug },
+      });
+    } catch (err) {
+      useStore.setState({
+        worldLoading: false,
+        worldError: err instanceof Error ? err.message : String(err),
+        worldRecord: null,
+      });
+    }
+  },
+
+  /** Fork the current world into an unpublished sandbox session. */
+  remixWorld() {
+    useStore.setState({ worldRecord: null, worldLiked: false, mode: 'sandbox' });
+    actions.navigate({ kind: 'home' });
+    actions.play();
+  },
+
+  async toggleLike() {
+    const rec = useStore.getState().worldRecord;
+    if (!rec) return;
+    try {
+      const res = await api.like(rec.slug);
+      useStore.setState({
+        worldLiked: res.liked,
+        worldRecord: { ...rec, likes: res.likes },
+      });
+    } catch {
+      /* likes are best-effort */
+    }
+  },
+
+  setPublishOpen(open: boolean) {
+    useStore.setState({ publishOpen: open });
+  },
+
+  /** Current world (initial conditions as loaded/edited) in codec form. */
+  currentWorld(): World {
+    const s = useStore.getState();
+    const c = s.config;
+    const config: WorldConfigSlice = {
+      timeScale: c.timeScale,
+      collisionMode: c.collisionMode,
+      radiusScale: c.radiusScale,
+      eta: c.eta,
+      softening: c.softening,
+      trailLength: c.trailLength,
+      showVelocity: c.showVelocity,
+      showAcceleration: c.showAcceleration,
+      showForces: c.showForces,
+      showGrid: c.showGrid,
+      showLabels: c.showLabels,
+      showCom: c.showCom,
+    };
+    // Publish what is on screen right now, so a world captured mid-run keeps
+    // the arrangement its author actually saw.
+    const live = workerClient.latest;
+    const bodies = live && s.liveSpecs.length
+      ? s.liveSpecs.map((b, i) => {
+          const k = live.ids.indexOf(b.id);
+          if (k < 0) return b;
+          return {
+            ...b,
+            mass: live.masses[k],
+            radius: live.radii[k],
+            position: [live.pos[3 * k], live.pos[3 * k + 1], live.pos[3 * k + 2]] as Vec3,
+            velocity: [live.vel[3 * k], live.vel[3 * k + 1], live.vel[3 * k + 2]] as Vec3,
+          };
+        })
+      : s.specs;
+    return { bodies, config };
+  },
+
+  /** Measure the current world's dynamics without disturbing the live run. */
+  analyzeCurrent(): WorldStats {
+    return analyzeWorld(actions.currentWorld().bodies);
+  },
+
+  /**
+   * Publish a world. The caller passes the exact snapshot it previewed
+   * (bodies, stats, thumbnail) so that what was measured and shown is what
+   * gets stored — the live simulation keeps running while the dialog is open,
+   * so re-reading it here would publish a different set of initial conditions.
+   */
+  async publishWorld(input: {
+    slug: string;
+    title: string;
+    author: string;
+    world?: World;
+    stats?: WorldStats;
+    thumb?: string | null;
+  }) {
+    useStore.setState({ publishing: true });
+    try {
+      const world = input.world ?? actions.currentWorld();
+      const thumb = input.thumb !== undefined ? input.thumb : captureThumbnail(640);
+      const stats = input.stats ?? analyzeWorld(world.bodies);
+      const data = await encodeWorld(world);
+      const res = await api.publish({
+        slug: input.slug,
+        title: input.title,
+        author: input.author,
+        data,
+        thumb,
+        stats,
+      });
+      useStore.setState({ publishing: false, publishOpen: false });
+      actions.navigate({ kind: 'world', slug: res.slug });
+      return res;
+    } catch (err) {
+      useStore.setState({ publishing: false });
+      throw err;
+    }
+  },
+
+  /** Encode the current world into a link that needs no server. */
+  async shareableHashLink(): Promise<string> {
+    const code = await encodeWorld(actions.currentWorld());
+    const base = typeof location !== 'undefined' ? location.origin + BASE_PATH : '';
+    return `${base}#w=${code}`;
   },
 
   /**
@@ -527,3 +767,7 @@ workerClient.on((msg) => {
 setInterval(() => {
   useStore.setState((s) => ({ liveTick: s.liveTick + 1 }));
 }, 100);
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('popstate', () => actions.applyRoute(parseRoute(location.pathname)));
+}
