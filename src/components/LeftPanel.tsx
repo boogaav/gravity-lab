@@ -98,7 +98,7 @@ export default function LeftPanel() {
       )}
 
       <section>
-        <h3>Bodies <button className="btn btn-sm" onClick={actions.addBody}>+ add</button></h3>
+        <h3 data-tip-title="Bodies" data-tip="Every gravitating object in the scenario. Click one to edit its mass, radius, position and velocity — the exact numbers the physics engine integrates.">Bodies <button className="btn btn-sm" onClick={actions.addBody} data-tip-title="Add body" data-tip="Adds a new asteroid you can then position and aim. It immediately takes part in the N-body gravity.">+ add</button></h3>
         <div className="body-list">
           {specs.map((b) => (
             <div key={b.id} className={`body-row ${selectedId === b.id ? 'sel' : ''}`}>
@@ -113,7 +113,7 @@ export default function LeftPanel() {
       </section>
 
       <section>
-        <h3>Integrator</h3>
+        <h3 data-tip-title="Integrator" data-tip="Controls how the physics is computed: step accuracy, what happens on contact, and whether close approaches are softened. These change the numerics, not the laws.">Integrator</h3>
         <label className="ctl">
           <span>accuracy η = {config.eta.toFixed(3)} <em>(substep = η × shortest gravitational timescale; smaller = more accurate)</em></span>
           <input type="range" min={-2.4} max={-0.7} step={0.05} value={Math.log10(config.eta)}
@@ -147,7 +147,7 @@ export default function LeftPanel() {
       </section>
 
       <section>
-        <h3>Display <em>(never affects physics)</em></h3>
+        <h3 data-tip-title="Display" data-tip="Purely visual settings. Nothing here touches the simulation — enlarging a planet does not change its gravity or its collision size.">Display <em>(never affects physics)</em></h3>
         <label className="ctl">
           <span>visual radius ×{config.radiusScale.toFixed(0)}
             {config.radiusScale > 1 && <em className="warn-text"> — enlarged; physics & collisions use real radius</em>}
@@ -172,7 +172,7 @@ export default function LeftPanel() {
       </section>
 
       <section>
-        <h3>Prediction (ghost trajectories)</h3>
+        <h3 data-tip-title="Prediction" data-tip="Projects where bodies are heading by integrating a copy of the current state forward. The ghost paths are real physics, never a drawn curve, and never feed back into the live run.">Prediction (ghost trajectories)</h3>
         <label className="ctl">
           <span><input type="checkbox" checked={config.showPrediction}
             onChange={(e) => {
@@ -190,7 +190,7 @@ export default function LeftPanel() {
       </section>
 
       <section>
-        <h3>Scenario I/O</h3>
+        <h3 data-tip-title="Scenario files" data-tip="Export the exact initial conditions as JSON to keep or share, import someone else's, or save a snapshot in this browser.">Scenario I/O</h3>
         <div className="btn-row">
           <button className="btn" onClick={() => {
             const blob = new Blob([actions.exportJSON()], { type: 'application/json' });

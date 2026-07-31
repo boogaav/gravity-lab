@@ -5,8 +5,10 @@ import LeftPanel from './components/LeftPanel';
 import RightPanel from './components/RightPanel';
 import BottomBar from './components/BottomBar';
 import Leaderboard from './components/Leaderboard';
+import CreatorPage from './components/CreatorPage';
 import PublishDialog from './components/PublishDialog';
 import WorldBar from './components/WorldBar';
+import Tooltip from './components/Tooltip';
 import { useStore, actions } from './state/store';
 
 export default function App() {
@@ -31,6 +33,15 @@ export default function App() {
     return (
       <div className="app">
         <Leaderboard />
+        <Tooltip />
+      </div>
+    );
+  }
+  if (route.kind === 'creator') {
+    return (
+      <div className="app">
+        <CreatorPage handle={route.handle} />
+        <Tooltip />
       </div>
     );
   }
@@ -50,7 +61,8 @@ export default function App() {
             href="https://x.com/boogaav"
             target="_blank"
             rel="noopener noreferrer"
-            title="Contact / connect on X"
+            data-tip-title="Contact"
+            data-tip="Questions, bugs or ideas? This opens the maker's profile on X."
           >
             ✉ Contact
           </a>
@@ -65,6 +77,7 @@ export default function App() {
       </div>
       {!sandbox && <BottomBar />}
       <PublishDialog />
+      <Tooltip />
     </div>
   );
 }

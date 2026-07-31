@@ -29,7 +29,7 @@ function LineChart({
   }, [series]);
   return (
     <div className="chart">
-      <div className="chart-title">{title} <em>{unit}</em></div>
+      <div className="chart-title" data-tip-title={title} data-tip={title === 'Energy' ? 'Kinetic and potential energy trading back and forth while their sum stays flat — that flat green line is energy conservation.' : 'How far total energy and angular momentum have drifted from their starting values. This is numerical error, not physics.'}>{title} <em>{unit}</em></div>
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" preserveAspectRatio="none">
         <rect x={0} y={0} width={W} height={H} fill="#070b14" rx={4} />
         {paths.map((p) => p.d && <path key={p.label} d={p.d} fill="none" stroke={p.color} strokeWidth={1.4} />)}
@@ -61,7 +61,7 @@ export default function BottomBar() {
   return (
     <div className="bottombar">
       <div className="scrub-wrap">
-        <div className="scrub-label">
+        <div className="scrub-label" data-tip-title="Replay scrubber" data-tip="Drag to jump back through recorded snapshots. It restores exact saved states — it never interpolates or fakes reversed physics.">
           recorded states: {history.length}
           {history.length > 1 && <> · scrub to replay (restores exact recorded snapshots — no interpolation)</>}
         </div>
@@ -78,7 +78,7 @@ export default function BottomBar() {
       <LineChart series={energySeries} title="Energy" unit="J vs time" />
       <LineChart series={driftSeries} title="Conservation drift" unit="fraction vs time" />
       <div className="collision-log">
-        <div className="chart-title">Events</div>
+        <div className="chart-title" data-tip-title="Events" data-tip="Every contact between bodies, with the impact speed and the kinetic energy dissipated in the collision.">Events</div>
         {collisions.length === 0 && <p className="hint">no contacts</p>}
         {collisions.slice(-6).map((c, i) => (
           <div key={i} className="collision-item">

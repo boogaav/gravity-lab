@@ -6,6 +6,7 @@ import { frameLabel, type FrameSel } from '../physics/frames';
 import { fmtTime } from '../ui/units';
 import { isRecording, shareApp, startRecording, stopRecording, takeScreenshot } from '../ui/capture';
 import { currentTrack, setTrack, type TrackId } from '../ui/music';
+import AccountMenu from './AccountMenu';
 
 const TRACK_BUTTONS: Array<{ id: TrackId; label: string; hint: string }> = [
   { id: 'off', label: 'Off', hint: 'No music' },
@@ -17,13 +18,13 @@ const TRACK_BUTTONS: Array<{ id: TrackId; label: string; hint: string }> = [
 function MusicPicker() {
   const [track, setTrackState] = useState<TrackId>(() => currentTrack());
   return (
-    <div className="music-group" title="Optional generated piano soundtrack (ambience only — not physics sonification)">
+    <div className="music-group" data-tip-title="Music" data-tip="Three short piano pieces generated live in your browser. Purely ambience — it is not a sonification of the physics.">
       <span className="music-icon">♪</span>
       {TRACK_BUTTONS.map((t) => (
         <button
           key={t.id}
           className={`btn btn-music ${track === t.id ? 'active' : ''}`}
-          title={t.hint}
+          data-tip-title={`Music: ${t.label}`} data-tip={t.hint}
           onClick={() => {
             setTrackState(t.id);
             setTrack(t.id);
@@ -53,14 +54,14 @@ function CaptureButtons() {
     <>
       <button
         className="btn"
-        title="Save a PNG of the current view"
+        data-tip-title="Screenshot" data-tip="Saves a PNG of the current view to your downloads."
         onClick={async () => flash((await takeScreenshot()) ? 'screenshot saved' : 'screenshot failed')}
       >
         📷 Shot
       </button>
       <button
         className={recording ? 'btn btn-rec' : 'btn'}
-        title={recording ? 'Stop and save the video' : 'Record the scene to a video file'}
+        data-tip-title="Record" data-tip={recording ? 'Recording — click again to stop and save the video file.' : 'Records the simulation to a video file. Click once to start, again to stop and save.'}
         onClick={() => {
           if (recording) {
             stopRecording();
@@ -77,7 +78,7 @@ function CaptureButtons() {
       </button>
       <button
         className="btn"
-        title="Share Gravity Lab"
+        data-tip-title="Share" data-tip="Opens your device share sheet, or copies the link if sharing is unavailable."
         onClick={async () => {
           const r = await shareApp();
           if (r === 'copied') flash('link copied ✓');
@@ -105,26 +106,27 @@ function SandboxBar() {
         <span className="brand-sub">real N-body gravity · nothing scripted</span>
       </div>
       <div className="transport">
-        <button className="btn" onClick={() => (running ? actions.pause() : actions.play())}>
+        <button className="btn" onClick={() => (running ? actions.pause() : actions.play())} data-tip-title="Start / Pause" data-tip="Runs or freezes the simulation. Time keeps its exact state when paused — nothing is reset.">
           {running ? '⏸ Pause' : '▶ Start'}
         </button>
-        <button className="btn" onClick={actions.reset} title="Clear your drops and restart">↺ Clear</button>
+        <button className="btn" onClick={actions.reset} data-tip-title="Clear" data-tip="Wipes every body you dropped and restores the starting star and planet. Your published worlds are untouched.">↺ Clear</button>
         <button
           className="btn btn-primary"
           onClick={() => actions.setPublishOpen(true)}
-          title="Give this world its own link and put it on the leaderboard"
+          data-tip-title="Publish" data-tip="Gives the arrangement on screen its own permanent link and adds it to the leaderboard. Its physics are measured first so it can be ranked."
         >
           🌍 Publish
         </button>
         <button
           className="btn"
           onClick={() => actions.navigate({ kind: 'leaderboard' })}
-          title="Browse every published world"
+          data-tip-title="Worlds" data-tip="Browse every published world, sortable by likes, size, chaos or how much carnage they produce."
         >
           ☰ Worlds
         </button>
         <CaptureButtons />
         <MusicPicker />
+        <AccountMenu />
       </div>
       <label className="ctl ctl-inline">
         <span>speed</span>
@@ -140,7 +142,7 @@ function SandboxBar() {
           <span className="chip chip-warn">⚠ numerical drift</span>
         )}
       </div>
-      <button className="btn btn-lab" onClick={() => actions.setMode('lab')} title="Full scientific interface: measurements, charts, reference frames, validation">
+      <button className="btn btn-lab" onClick={() => actions.setMode('lab')} data-tip-title="Full lab" data-tip="Opens the scientific interface: live energy and momentum measurements, charts, reference frames, editable bodies and the physics validation suite. Same running simulation.">
         🔬 Open full lab
       </button>
     </div>
@@ -189,7 +191,7 @@ export default function TopBar() {
         <span className="brand-name">GRAVITY LAB</span>
         <span className="brand-sub">Newtonian N-body · Yoshida-4 symplectic · double precision</span>
       </div>
-      <button className="btn" onClick={() => actions.setMode('sandbox')} title="Minimal mode: press & hold to drop new bodies">
+      <button className="btn" onClick={() => actions.setMode('sandbox')} data-tip-title="Sandbox" data-tip="Minimal mode: just space and your hands. Press and hold to grow a body, drag to aim, release to launch.">
         💧 Sandbox
       </button>
       <select
@@ -203,15 +205,15 @@ export default function TopBar() {
         ))}
       </select>
       <div className="transport">
-        <button className="btn" onClick={() => (running ? actions.pause() : actions.play())}>
+        <button className="btn" onClick={() => (running ? actions.pause() : actions.play())} data-tip-title="Start / Pause" data-tip="Runs or freezes the simulation. Time keeps its exact state when paused — nothing is reset.">
           {running ? '⏸ Pause' : '▶ Start'}
         </button>
-        <button className="btn" onClick={actions.singleStep} title="Advance exactly one adaptive physics substep">⏭ Step</button>
-        <button className="btn" onClick={actions.reset} title="Restore the exact initial conditions">↺ Reset</button>
-        <button className="btn btn-primary" onClick={() => actions.setPublishOpen(true)} title="Publish this world">
+        <button className="btn" onClick={actions.singleStep} data-tip-title="Step" data-tip="Advances exactly one adaptive physics substep, so you can inspect an encounter frame by frame.">⏭ Step</button>
+        <button className="btn" onClick={actions.reset} data-tip-title="Reset" data-tip="Restores the scenario's exact initial conditions and clears recorded history.">↺ Reset</button>
+        <button className="btn btn-primary" onClick={() => actions.setPublishOpen(true)} data-tip-title="Publish" data-tip="Gives this world its own permanent link and adds it to the leaderboard.">
           🌍 Publish
         </button>
-        <button className="btn" onClick={() => actions.navigate({ kind: 'leaderboard' })} title="Browse published worlds">
+        <button className="btn" onClick={() => actions.navigate({ kind: 'leaderboard' })} data-tip-title="Worlds" data-tip="Browse every published world on the leaderboard.">
           ☰ Worlds
         </button>
         <MusicPicker />
@@ -236,7 +238,7 @@ export default function TopBar() {
           const opt = frameOptions.find((o) => o.key === e.target.value);
           if (opt) actions.setFrame(opt.sel);
         }}
-        title="Reference frame (presentation only — physics state is untouched)"
+        data-tip-title="Reference frame" data-tip="Changes who you are watching from — the Sun, a planet, the centre of mass. This only changes the presentation; the underlying physics is identical."
       >
         {frameOptions.map((o) => (
           <option key={o.key} value={o.key}>{frameLabel(o.sel, liveSpecs)}</option>

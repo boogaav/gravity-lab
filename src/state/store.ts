@@ -66,7 +66,8 @@ export type UIMode = 'sandbox' | 'lab';
 export type Route =
   | { kind: 'home' }
   | { kind: 'world'; slug: string }
-  | { kind: 'leaderboard' };
+  | { kind: 'leaderboard' }
+  | { kind: 'creator'; handle: string };
 
 interface StoreState {
   mode: UIMode;
@@ -124,6 +125,8 @@ export function parseRoute(pathname: string): Route {
   const m = /^\/@([a-z0-9-]{2,32})\/?$/i.exec(p);
   if (m) return { kind: 'world', slug: m[1].toLowerCase() };
   if (/^\/worlds\/?$/.test(p)) return { kind: 'leaderboard' };
+  const u = /^\/u\/([a-z0-9_-]{2,24})\/?$/i.exec(p);
+  if (u) return { kind: 'creator', handle: u[1].toLowerCase() };
   return { kind: 'home' };
 }
 
@@ -326,6 +329,7 @@ export const actions = {
     const base = BASE_PATH;
     if (route.kind === 'world') return `${base}@${route.slug}`;
     if (route.kind === 'leaderboard') return `${base}worlds`;
+    if (route.kind === 'creator') return `${base}u/${route.handle}`;
     return base;
   },
 

@@ -1,4 +1,5 @@
 import type { WorldStats } from '../physics/analyze';
+import { accessToken } from './authToken';
 
 /**
  * Client for the published-worlds registry. When the app is served from a
@@ -32,6 +33,7 @@ export interface WorldCard {
   createdAt: number;
   updatedAt: number | null;
   hasThumb: boolean;
+  ownerHandle: string | null;
   /** Whether this world was published with an owner key (and so can be edited). */
   editable: boolean;
 }
@@ -43,19 +45,24 @@ export interface WorldRecord extends WorldCard {
 
 export type SortKey = 'new' | 'top' | 'chaos' | 'big' | 'carnage';
 
-export const SORTS: Array<{ key: SortKey; label: string; hint: string }> = [
-  { key: 'new', label: 'Newest', hint: 'Most recently published' },
-  { key: 'top', label: 'Top', hint: 'Most liked' },
-  { key: 'chaos', label: 'Most chaotic', hint: 'Highest measured Lyapunov exponent' },
-  { key: 'big', label: 'Biggest', hint: 'Most bodies' },
-  { key: 'carnage', label: 'Most carnage', hint: 'Most bodies lost to collisions' },
+export const SORTS: Array<{ key: SortKey; label: string; tip: string }> = [
+  { key: 'new', label: 'Newest', tip: 'Most recently published worlds first.' },
+  { key: 'top', label: 'Top', tip: 'Most liked worlds, then most viewed.' },
+  { key: 'chaos', label: 'Most chaotic', tip: 'Highest measured Lyapunov exponent: worlds where a one-in-a-billion nudge grows fastest into a completely different future.' },
+  { key: 'big', label: 'Biggest', tip: 'Worlds containing the most gravitating bodies.' },
+  { key: 'carnage', label: 'Most carnage', tip: 'Worlds that lost the most bodies to collisions when run forward.' },
 ];
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    headers: { 'content-type': 'application/json', ...(init?.headers ?? {}) },
-  });
+  // A signed-in caller proves ownership with their token; anonymous callers
+  // fall back to the world's secret key.
+  const token = await accessToken();
+  const headers: Record<string, string> = {
+    'content-type': 'application/json',
+    ...((init?.headers as Record<string, string>) ?? {}),
+  };
+  if (token) headers.authorization = `Bearer ${token}`;
+  const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
   const text = await res.text();
   let body: any = null;
   try {

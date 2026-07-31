@@ -5,6 +5,10 @@ COPY package.json package-lock.json* ./
 RUN npm install --no-audit --no-fund
 COPY tsconfig.json vite.config.ts index.html ./
 COPY src ./src
+# Privy app id is baked in at build time (it is a public identifier).
+# Empty means accounts are disabled and the SDK is never even downloaded.
+ARG VITE_PRIVY_APP_ID=""
+ENV VITE_PRIVY_APP_ID=$VITE_PRIVY_APP_ID
 RUN npx vite build --base=/
 
 # ---- runtime: API + static ----

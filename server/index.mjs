@@ -10,6 +10,7 @@ import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import Database from 'better-sqlite3';
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import { authEnabled, bearerToken, verifyPrivyToken } from './auth.mjs';
 import { readFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -64,10 +65,23 @@ function ensureColumn(table, column, definition) {
     db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
   }
 }
-// Owner key: lets an author come back and update their world.
+// Owner key: lets an anonymous author come back and update their world.
 ensureColumn('worlds', 'key_hash', "TEXT NOT NULL DEFAULT ''");
 ensureColumn('worlds', 'key_salt', "TEXT NOT NULL DEFAULT ''");
 ensureColumn('worlds', 'updated_at', 'INTEGER');
+// Account ownership: worlds published while signed in belong to a Privy user.
+ensureColumn('worlds', 'owner_did', "TEXT NOT NULL DEFAULT ''");
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    did          TEXT PRIMARY KEY,
+    handle       TEXT NOT NULL UNIQUE,
+    display_name TEXT NOT NULL DEFAULT '',
+    created_at   INTEGER NOT NULL,
+    last_seen    INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_worlds_owner ON worlds(owner_did);
+`);
 
 // Per-deploy salt: IPs are only ever stored as unrecoverable hashes.
 const IP_SALT = process.env.IP_SALT || randomBytes(16).toString('hex');
@@ -109,7 +123,7 @@ function allowAuthAttempt(key) {
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{1,31}$/;
 const RESERVED = new Set([
   'api', 'assets', 'worlds', 'world', 'index', 'about', 'admin', 'static',
-  'new', 'top', 'me', 'login', 'signup', 'null', 'undefined', 'favicon',
+  'new', 'top', 'me', 'login', 'signup', 'null', 'undefined', 'favicon', 'u', 'creators', 'profile',
 ]);
 const MAX_DATA = 96 * 1024;
 const MAX_THUMB = 260 * 1024;
@@ -137,6 +151,47 @@ function allowPublish(key) {
 
 const app = Fastify({ logger: false, bodyLimit: 512 * 1024, trustProxy: true });
 
+// ---------------------------------------------------------------- accounts
+
+const HANDLE_RE = /^[a-z0-9][a-z0-9_-]{1,23}$/;
+
+/** Resolve the signed-in user for a request, or null when anonymous. */
+async function currentUser(req) {
+  if (!authEnabled()) return null;
+  const token = bearerToken(req);
+  if (!token) return null;
+  try {
+    const claims = await verifyPrivyToken(token);
+    return db.prepare('SELECT * FROM users WHERE did = ?').get(claims.sub) ?? { did: claims.sub, unregistered: true };
+  } catch {
+    return null;
+  }
+}
+
+/** Derive a free handle from a preferred string. */
+function allocateHandle(preferred, did) {
+  let base = String(preferred || '')
+    .toLowerCase()
+    .replace(/^@+/, '')
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 24);
+  if (base.length < 2) base = `pilot-${did.slice(-6).replace(/[^a-z0-9]/gi, '').toLowerCase()}`;
+  if (!HANDLE_RE.test(base)) base = `pilot-${randomBytes(3).toString('hex')}`;
+  let candidate = base;
+  let n = 1;
+  while (db.prepare('SELECT 1 FROM users WHERE handle = ?').get(candidate)) {
+    const suffix = String(++n);
+    candidate = `${base.slice(0, 24 - suffix.length - 1)}-${suffix}`;
+  }
+  return candidate;
+}
+
+const publicUser = (u) =>
+  u && !u.unregistered
+    ? { did: u.did, handle: u.handle, displayName: u.display_name, createdAt: u.created_at }
+    : null;
+
 const clientIp = (req) =>
   req.headers['fly-client-ip'] || (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.ip || '0.0.0.0';
 
@@ -158,31 +213,36 @@ const rowToCard = (r) => ({
   updatedAt: r.updated_at ?? null,
   hasThumb: !!r.has_thumb,
   editable: !!r.editable,
+  ownerHandle: r.owner_handle ?? null,
 });
 
-const LIST_COLS = `slug, title, author, bodies, total_mass, chaos, chaos_window, survivors,
-  escapees, first_collision, dynamical_time, views, likes, created_at, updated_at,
-  (thumb IS NOT NULL) AS has_thumb, (key_hash != '') AS editable`;
+const LIST_COLS = `w.slug, w.title, w.author, w.bodies, w.total_mass, w.chaos, w.chaos_window, w.survivors,
+  w.escapees, w.first_collision, w.dynamical_time, w.views, w.likes, w.created_at, w.updated_at,
+  (w.thumb IS NOT NULL) AS has_thumb, (w.key_hash != '' OR w.owner_did != '') AS editable,
+  u.handle AS owner_handle`;
+/** Every listing joins the owner so cards can link to a creator profile. */
+const FROM_WORLDS = 'FROM worlds w LEFT JOIN users u ON u.did = w.owner_did';
 
+// Columns are qualified: `users` also has created_at, so bare names are ambiguous.
 const SORTS = {
-  new: 'created_at DESC',
-  top: 'likes DESC, views DESC, created_at DESC',
-  chaos: 'chaos DESC, created_at DESC',
-  big: 'bodies DESC, created_at DESC',
-  carnage: '(bodies - survivors) DESC, created_at DESC',
+  new: 'w.created_at DESC',
+  top: 'w.likes DESC, w.views DESC, w.created_at DESC',
+  chaos: 'w.chaos DESC, w.created_at DESC',
+  big: 'w.bodies DESC, w.created_at DESC',
+  carnage: '(w.bodies - w.survivors) DESC, w.created_at DESC',
 };
 
 app.get('/api/worlds', async (req) => {
   const sort = SORTS[req.query.sort] ? req.query.sort : 'new';
   const limit = Math.min(Math.max(parseInt(req.query.limit ?? '60', 10) || 60, 1), 100);
-  const rows = db.prepare(`SELECT ${LIST_COLS} FROM worlds ORDER BY ${SORTS[sort]} LIMIT ?`).all(limit);
+  const rows = db.prepare(`SELECT ${LIST_COLS} ${FROM_WORLDS} ORDER BY ${SORTS[sort]} LIMIT ?`).all(limit);
   const total = db.prepare('SELECT COUNT(*) AS c FROM worlds').get().c;
   return { sort, total, worlds: rows.map(rowToCard) };
 });
 
 app.get('/api/worlds/:slug', async (req, reply) => {
   const slug = String(req.params.slug || '').toLowerCase();
-  const row = db.prepare(`SELECT ${LIST_COLS}, data FROM worlds WHERE slug = ?`).get(slug);
+  const row = db.prepare(`SELECT ${LIST_COLS}, w.data ${FROM_WORLDS} WHERE w.slug = ?`).get(slug);
   if (!row) return reply.code(404).send({ error: 'not found' });
   db.prepare('UPDATE worlds SET views = views + 1 WHERE slug = ?').run(slug);
   const liked = !!db.prepare('SELECT 1 FROM likes WHERE slug = ? AND ip_hash = ?').get(slug, hashIp(clientIp(req)));
@@ -230,8 +290,15 @@ app.post('/api/worlds', async (req, reply) => {
   }
   const data = String(body.data || '');
   if (!data || data.length > MAX_DATA) return reply.code(400).send({ error: 'World data missing or too large.' });
+  // Ownership comes from the signed-in account when there is one; a secret key
+  // is the fallback that keeps anonymous publishing possible.
+  const me = await currentUser(req);
+  const ownerDid = me && !me.unregistered ? me.did : '';
   const ownerKey = String(body.key || '');
-  if (ownerKey.length < MIN_KEY_LEN) {
+  if (!ownerDid && ownerKey.length < MIN_KEY_LEN) {
+    return reply.code(400).send({ error: `Secret key must be at least ${MIN_KEY_LEN} characters.` });
+  }
+  if (ownerKey && ownerKey.length < MIN_KEY_LEN) {
     return reply.code(400).send({ error: `Secret key must be at least ${MIN_KEY_LEN} characters.` });
   }
 
@@ -244,14 +311,15 @@ app.post('/api/worlds', async (req, reply) => {
     if (buf.length && buf.length <= MAX_THUMB) thumb = buf;
   }
   const s = body.stats || {};
-  const keyRecord = makeKeyRecord(ownerKey);
+  const keyRecord = ownerKey ? makeKeyRecord(ownerKey) : { key_hash: '', key_salt: '' };
   db.prepare(
     `INSERT INTO worlds (slug, title, author, data, thumb, bodies, total_mass, chaos, chaos_window,
-       survivors, escapees, first_collision, dynamical_time, created_at, ip_hash, key_hash, key_salt)
+       survivors, escapees, first_collision, dynamical_time, created_at, ip_hash, key_hash, key_salt, owner_did)
      VALUES (@slug, @title, @author, @data, @thumb, @bodies, @total_mass, @chaos, @chaos_window,
-       @survivors, @escapees, @first_collision, @dynamical_time, @created_at, @ip_hash, @key_hash, @key_salt)`,
+       @survivors, @escapees, @first_collision, @dynamical_time, @created_at, @ip_hash, @key_hash, @key_salt, @owner_did)`,
   ).run({
     ...keyRecord,
+    owner_did: ownerDid,
     slug,
     title: clean(body.title, 60) || slug,
     author: clean(body.author, 40),
@@ -268,37 +336,48 @@ app.post('/api/worlds', async (req, reply) => {
     created_at: Date.now(),
     ip_hash: ip,
   });
-  return { slug, url: `${PUBLIC_URL}/@${slug}` };
+  return { slug, url: `${PUBLIC_URL}/@${slug}`, owner: publicUser(me) };
 });
+
+/**
+ * Decide whether a request may modify a world. Ownership is satisfied either by
+ * being signed in as the account that published it, or by presenting its secret
+ * key. Returns null when allowed, or a {code, error} to send back.
+ */
+async function authorizeWorld(req, slug) {
+  const row = db.prepare('SELECT key_hash, key_salt, owner_did FROM worlds WHERE slug = ?').get(slug);
+  if (!row) return { code: 404, error: 'not found' };
+  const me = await currentUser(req);
+  if (row.owner_did && me && !me.unregistered && me.did === row.owner_did) return null;
+  if (!allowAuthAttempt(hashIp(clientIp(req)))) {
+    return { code: 429, error: 'Too many attempts — wait a few minutes.' };
+  }
+  if (!row.key_hash) {
+    return {
+      code: 403,
+      error: row.owner_did
+        ? 'This world belongs to another account — sign in as its owner to change it.'
+        : 'This world was published without a secret key and cannot be edited.',
+    };
+  }
+  if (!keyMatches(row, req.body?.key)) return { code: 403, error: 'That secret key does not match.' };
+  return null;
+}
 
 /** Check an owner key without changing anything (unlocks the edit UI). */
 app.post('/api/worlds/:slug/auth', async (req, reply) => {
   const slug = String(req.params.slug || '').toLowerCase();
-  const row = db.prepare('SELECT key_hash, key_salt FROM worlds WHERE slug = ?').get(slug);
-  if (!row) return reply.code(404).send({ error: 'not found' });
-  if (!allowAuthAttempt(hashIp(clientIp(req)))) {
-    return reply.code(429).send({ error: 'Too many attempts — wait a few minutes.' });
-  }
-  if (!row.key_hash) {
-    return reply.code(403).send({ error: 'This world was published without a secret key and cannot be edited.' });
-  }
-  if (!keyMatches(row, req.body?.key)) return reply.code(403).send({ error: 'That secret key does not match.' });
+  const denied = await authorizeWorld(req, slug);
+  if (denied) return reply.code(denied.code).send({ error: denied.error });
   return { ok: true };
 });
 
 /** Update a world in place. Requires the owner key set at publish time. */
 app.put('/api/worlds/:slug', async (req, reply) => {
   const slug = String(req.params.slug || '').toLowerCase();
-  const row = db.prepare('SELECT key_hash, key_salt FROM worlds WHERE slug = ?').get(slug);
-  if (!row) return reply.code(404).send({ error: 'not found' });
-  if (!allowAuthAttempt(hashIp(clientIp(req)))) {
-    return reply.code(429).send({ error: 'Too many attempts — wait a few minutes.' });
-  }
-  if (!row.key_hash) {
-    return reply.code(403).send({ error: 'This world was published without a secret key and cannot be edited.' });
-  }
+  const denied = await authorizeWorld(req, slug);
+  if (denied) return reply.code(denied.code).send({ error: denied.error });
   const body = req.body || {};
-  if (!keyMatches(row, body.key)) return reply.code(403).send({ error: 'That secret key does not match.' });
 
   const data = String(body.data || '');
   if (!data || data.length > MAX_DATA) return reply.code(400).send({ error: 'World data missing or too large.' });
@@ -337,18 +416,89 @@ app.put('/api/worlds/:slug', async (req, reply) => {
 /** Delete a world. Requires the owner key; irreversible. */
 app.delete('/api/worlds/:slug', async (req, reply) => {
   const slug = String(req.params.slug || '').toLowerCase();
-  const row = db.prepare('SELECT key_hash, key_salt FROM worlds WHERE slug = ?').get(slug);
-  if (!row) return reply.code(404).send({ error: 'not found' });
-  if (!allowAuthAttempt(hashIp(clientIp(req)))) {
-    return reply.code(429).send({ error: 'Too many attempts — wait a few minutes.' });
-  }
-  if (!row.key_hash) {
-    return reply.code(403).send({ error: 'This world was published without a secret key and cannot be removed.' });
-  }
-  if (!keyMatches(row, req.body?.key)) return reply.code(403).send({ error: 'That secret key does not match.' });
+  const denied = await authorizeWorld(req, slug);
+  if (denied) return reply.code(denied.code).send({ error: denied.error });
   db.prepare('DELETE FROM likes WHERE slug = ?').run(slug);
   db.prepare('DELETE FROM worlds WHERE slug = ?').run(slug);
   return { deleted: true, slug };
+});
+
+// ---------------------------------------------------------------- session
+
+app.get('/api/config', async () => ({ auth: authEnabled() }));
+
+/**
+ * Establish or refresh a session. Creates the account on first sign-in,
+ * allocating a handle from the caller's preference (or their Privy identity).
+ */
+app.post('/api/me', async (req, reply) => {
+  if (!authEnabled()) return reply.code(501).send({ error: 'Accounts are not enabled on this server.' });
+  const token = bearerToken(req);
+  if (!token) return reply.code(401).send({ error: 'Sign in first.' });
+  let claims;
+  try {
+    claims = await verifyPrivyToken(token);
+  } catch (err) {
+    return reply.code(401).send({ error: err.message });
+  }
+  const now = Date.now();
+  let user = db.prepare('SELECT * FROM users WHERE did = ?').get(claims.sub);
+  if (!user) {
+    const handle = allocateHandle(req.body?.handle ?? req.body?.suggested, claims.sub);
+    db.prepare(
+      `INSERT INTO users (did, handle, display_name, created_at, last_seen)
+       VALUES (?, ?, ?, ?, ?)`,
+    ).run(claims.sub, handle, clean(req.body?.displayName, 40), now, now);
+    user = db.prepare('SELECT * FROM users WHERE did = ?').get(claims.sub);
+  } else {
+    db.prepare('UPDATE users SET last_seen = ? WHERE did = ?').run(now, claims.sub);
+  }
+  return { user: publicUser(user), worlds: db.prepare('SELECT COUNT(*) AS c FROM worlds WHERE owner_did = ?').get(claims.sub).c };
+});
+
+/** Rename yourself (handle and/or display name). */
+app.patch('/api/me', async (req, reply) => {
+  const me = await currentUser(req);
+  if (!me || me.unregistered) return reply.code(401).send({ error: 'Sign in first.' });
+  const body = req.body || {};
+  if (body.handle !== undefined) {
+    const wanted = String(body.handle).toLowerCase().replace(/^@+/, '').trim();
+    if (!HANDLE_RE.test(wanted)) {
+      return reply.code(400).send({ error: 'Handle must be 2–24 characters: letters, numbers, dash or underscore.' });
+    }
+    const taken = db.prepare('SELECT did FROM users WHERE handle = ?').get(wanted);
+    if (taken && taken.did !== me.did) return reply.code(409).send({ error: 'That handle is taken.' });
+    db.prepare('UPDATE users SET handle = ? WHERE did = ?').run(wanted, me.did);
+  }
+  if (body.displayName !== undefined) {
+    db.prepare('UPDATE users SET display_name = ? WHERE did = ?').run(clean(body.displayName, 40), me.did);
+  }
+  return { user: publicUser(db.prepare('SELECT * FROM users WHERE did = ?').get(me.did)) };
+});
+
+/** Worlds owned by the signed-in account. */
+app.get('/api/me/worlds', async (req, reply) => {
+  const me = await currentUser(req);
+  if (!me || me.unregistered) return reply.code(401).send({ error: 'Sign in first.' });
+  const rows = db
+    .prepare(`SELECT ${LIST_COLS} ${FROM_WORLDS} WHERE w.owner_did = ? ORDER BY w.created_at DESC`)
+    .all(me.did);
+  return { user: publicUser(me), worlds: rows.map(rowToCard) };
+});
+
+/** Public creator profile: their account plus everything they've published. */
+app.get('/api/creators/:handle', async (req, reply) => {
+  const handle = String(req.params.handle || '').toLowerCase();
+  const user = db.prepare('SELECT * FROM users WHERE handle = ?').get(handle);
+  if (!user) return reply.code(404).send({ error: 'No such creator.' });
+  const rows = db
+    .prepare(`SELECT ${LIST_COLS} ${FROM_WORLDS} WHERE w.owner_did = ? ORDER BY w.created_at DESC`)
+    .all(user.did);
+  const totals = rows.reduce(
+    (acc, r) => ({ likes: acc.likes + r.likes, views: acc.views + r.views }),
+    { likes: 0, views: 0 },
+  );
+  return { user: publicUser(user), totals, worlds: rows.map(rowToCard) };
 });
 
 app.get('/api/health', async () => ({
@@ -405,7 +555,7 @@ app.setNotFoundHandler(async (req, reply) => {
   if (req.url.startsWith('/api/')) return reply.code(404).send({ error: 'not found' });
   const m = /^\/@([a-z0-9-]{2,32})(?:[/?#]|$)/i.exec(req.url);
   if (m) {
-    const row = db.prepare(`SELECT ${LIST_COLS} FROM worlds WHERE slug = ?`).get(m[1].toLowerCase());
+    const row = db.prepare(`SELECT ${LIST_COLS} ${FROM_WORLDS} WHERE w.slug = ?`).get(m[1].toLowerCase());
     if (row) return reply.type('text/html').send(renderWorldPage(row));
   }
   return reply.type('text/html').send(indexHtml());

@@ -65,7 +65,21 @@ export default function WorldBar() {
         <b>{rec.title}</b>
         <span className="hint">
           @{rec.slug}
-          {rec.author && <> · by {rec.author}</>}
+          {rec.ownerHandle ? (
+            <>
+              {' · by '}
+              <span
+                className="creator-link"
+                data-tip-title={`@${rec.ownerHandle}`}
+                data-tip="See every world published by this creator."
+                onClick={() => actions.navigate({ kind: 'creator', handle: rec.ownerHandle! })}
+              >
+                @{rec.ownerHandle}
+              </span>
+            </>
+          ) : (
+            rec.author && <> · by {rec.author}</>
+          )}
         </span>
       </div>
       <div className="world-bar-stats">
@@ -75,7 +89,7 @@ export default function WorldBar() {
         <span className="wchip">{rec.views} views</span>
       </div>
       <div className="world-bar-actions">
-        <button className={`btn btn-sm ${liked ? 'btn-liked' : ''}`} onClick={actions.toggleLike}>
+        <button className={`btn btn-sm ${liked ? 'btn-liked' : ''}`} onClick={actions.toggleLike} data-tip-title="Like" data-tip="Give this world a like. Likes drive the Top ranking on the leaderboard.">
           {liked ? '♥' : '♡'} {rec.likes}
         </button>
         <button
@@ -90,6 +104,8 @@ export default function WorldBar() {
             else if (r === 'failed') setToast('sharing unavailable');
             if (r !== 'shared') window.setTimeout(() => setToast(''), 2200);
           }}
+          data-tip-title="Share"
+          data-tip="Share this exact world. The link previews with its own thumbnail and measured stats."
         >
           ↗ Share
         </button>
@@ -97,20 +113,25 @@ export default function WorldBar() {
           <button
             className="btn btn-sm btn-primary"
             onClick={() => actions.setPublishOpen(true, 'update')}
-            title="Save the current arrangement over this world"
+            data-tip-title="Update" data-tip="Save what is on screen now over this published world. Its link, likes and views stay the same."
           >
             ✎ Update
           </button>
         )}
         {rec.editable && !unlocked && (
-          <button className="btn btn-sm" onClick={() => setAskKey(true)} title="Enter the secret key you saved">
+          <button className="btn btn-sm" onClick={() => setAskKey(true)} data-tip-title="Claim this world" data-tip="Enter the secret key you saved when publishing to unlock editing from this device.">
             🔑 I own this
           </button>
         )}
-        <button className="btn btn-sm" onClick={actions.remixWorld} title="Fork this world and keep playing">
+        <button className="btn btn-sm" onClick={actions.remixWorld} data-tip-title="Remix" data-tip="Take this world into your own sandbox and keep changing it. The original stays exactly as its author published it.">
           ⑂ Remix
         </button>
-        <button className="btn btn-sm" onClick={() => actions.navigate({ kind: 'leaderboard' })}>
+        <button
+          className="btn btn-sm"
+          onClick={() => actions.navigate({ kind: 'leaderboard' })}
+          data-tip-title="All worlds"
+          data-tip="Browse every published world on the leaderboard."
+        >
           ☰ All worlds
         </button>
         {toast && <span className="chip chip-var">{toast}</span>}

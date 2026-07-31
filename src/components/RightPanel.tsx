@@ -20,7 +20,7 @@ function DiagnosticsSection({ f }: { f: FramePayload }) {
   const d = f.diag;
   return (
     <section>
-      <h3>System measurements <em>(SI, computed every frame)</em></h3>
+      <h3 data-tip-title="System measurements" data-tip="Live conserved quantities in SI units. Total energy and angular momentum should stay constant — the drift percentages show how much numerical error has accumulated.">System measurements <em>(SI, computed every frame)</em></h3>
       <Row k="kinetic energy ΣK" v={fmtEnergy(d.kinetic)} />
       <Row k="potential energy ΣU" v={fmtEnergy(d.potential)} />
       <Row k="total mechanical E" v={fmtEnergy(d.total)} />
@@ -117,7 +117,7 @@ function MarkSection({ f }: { f: FramePayload }) {
   const frame = useStore((s) => s.frame);
   return (
     <section>
-      <h3>Before / after comparison</h3>
+      <h3 data-tip-title="Before / after" data-tip="Mark a moment before an encounter, then compare each body's speed and kinetic energy afterwards. This is how you read a gravity assist: what one body gains, others lose.">Before / after comparison</h3>
       <div className="btn-row">
         <button className="btn btn-sm" onClick={actions.mark}>📍 mark “before” state</button>
         {markEntry && <button className="btn btn-sm" onClick={actions.clearMark}>clear</button>}
@@ -177,7 +177,7 @@ function ExplanationSection({ f }: { f: FramePayload }) {
   }, [f, liveSpecs, selectedId, pairSel, frame]);
   return (
     <section>
-      <h3>What is happening <em>(generated from measured state)</em></h3>
+      <h3 data-tip-title="Plain-language readout" data-tip="A description generated from the live numbers — not a scripted story. It updates as the physics changes.">What is happening <em>(generated from measured state)</em></h3>
       {sentences.map((s, i) => <p key={i} className="explain">{s}</p>)}
     </section>
   );
@@ -188,8 +188,8 @@ function ValidationSection() {
   const validationRunning = useStore((s) => s.validationRunning);
   return (
     <section>
-      <h3>Physics validation</h3>
-      <button className="btn" disabled={validationRunning} onClick={actions.runValidation}>
+      <h3 data-tip-title="Validation" data-tip="Runs the accuracy test suite in your browser right now and prints the measured numbers: energy conservation, convergence order, and a flyby checked against its analytical deflection.">Physics validation</h3>
+      <button className="btn" disabled={validationRunning} onClick={actions.runValidation} data-tip-title="Run tests" data-tip="Executes ten physics checks and shows what was actually measured, so you can judge the accuracy yourself rather than take a claim on trust.">
         {validationRunning ? 'running…' : '▶ run automated accuracy tests'}
       </button>
       {validation && (
