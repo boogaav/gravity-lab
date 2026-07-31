@@ -9,6 +9,7 @@ import { api, type WorldCard } from './api';
 import { decodeWorld, encodeWorld, type World, type WorldConfigSlice } from './worldCodec';
 import { analyzeWorld, type WorldStats } from '../physics/analyze';
 import { captureThumbnail } from '../ui/capture';
+import { recallKey, rememberKey } from './worldKeys';
 
 export interface HistoryEntry {
   time: number;
@@ -77,6 +78,10 @@ interface StoreState {
   worldError: string | null;
   publishOpen: boolean;
   publishing: boolean;
+  /** 'create' publishes a new world; 'update' saves over one you hold the key for. */
+  publishMode: 'create' | 'update';
+  /** True once the owner key for the world on screen has been verified. */
+  worldUnlocked: boolean;
   presetId: string;
   presetName: string;
   presetDescription: string;
@@ -191,6 +196,8 @@ export const useStore = create<StoreState>(() => ({
   worldError: null,
   publishOpen: false,
   publishing: false,
+  publishMode: 'create',
+  worldUnlocked: false,
   presetId: '',
   presetName: '',
   presetDescription: '',
@@ -392,6 +399,8 @@ export const actions = {
         worldLiked: rec.liked,
         worldLoading: false,
         route: { kind: 'world', slug },
+        // this device already holds the owner key → edit controls unlock
+        worldUnlocked: rec.editable && !!recallKey(slug),
       });
     } catch (err) {
       useStore.setState({
@@ -423,8 +432,51 @@ export const actions = {
     }
   },
 
-  setPublishOpen(open: boolean) {
-    useStore.setState({ publishOpen: open });
+  setPublishOpen(open: boolean, mode: 'create' | 'update' = 'create') {
+    useStore.setState({ publishOpen: open, publishMode: open ? mode : 'create' });
+  },
+
+  /** Verify an owner key for the world on screen and remember it on this device. */
+  async unlockWorld(key: string): Promise<void> {
+    const rec = useStore.getState().worldRecord;
+    if (!rec) throw new Error('No world loaded.');
+    await api.auth(rec.slug, key);
+    rememberKey(rec.slug, key);
+    useStore.setState({ worldUnlocked: true });
+  },
+
+  /** Save the current state over an existing world (requires its owner key). */
+  async updateWorld(input: {
+    slug: string;
+    title: string;
+    author: string;
+    key: string;
+    world?: World;
+    stats?: WorldStats;
+    thumb?: string | null;
+  }) {
+    useStore.setState({ publishing: true });
+    try {
+      const world = input.world ?? actions.currentWorld();
+      const thumb = input.thumb !== undefined ? input.thumb : captureThumbnail(640);
+      const stats = input.stats ?? analyzeWorld(world.bodies);
+      const data = await encodeWorld(world);
+      const res = await api.update(input.slug, {
+        title: input.title,
+        author: input.author,
+        data,
+        thumb,
+        stats,
+        key: input.key,
+      });
+      rememberKey(input.slug, input.key);
+      useStore.setState({ publishing: false, publishOpen: false, worldUnlocked: true });
+      await actions.openWorld(input.slug);
+      return res;
+    } catch (err) {
+      useStore.setState({ publishing: false });
+      throw err;
+    }
   },
 
   /** Current world (initial conditions as loaded/edited) in codec form. */
@@ -482,6 +534,7 @@ export const actions = {
     world?: World;
     stats?: WorldStats;
     thumb?: string | null;
+    key: string;
   }) {
     useStore.setState({ publishing: true });
     try {
@@ -496,8 +549,10 @@ export const actions = {
         data,
         thumb,
         stats,
+        key: input.key,
       });
-      useStore.setState({ publishing: false, publishOpen: false });
+      rememberKey(res.slug, input.key);
+      useStore.setState({ publishing: false, publishOpen: false, worldUnlocked: true });
       actions.navigate({ kind: 'world', slug: res.slug });
       return res;
     } catch (err) {

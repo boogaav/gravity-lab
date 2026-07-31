@@ -30,7 +30,10 @@ export interface WorldCard {
   views: number;
   likes: number;
   createdAt: number;
+  updatedAt: number | null;
   hasThumb: boolean;
+  /** Whether this world was published with an owner key (and so can be edited). */
+  editable: boolean;
 }
 
 export interface WorldRecord extends WorldCard {
@@ -83,7 +86,30 @@ export const api = {
     data: string;
     thumb: string | null;
     stats: WorldStats;
+    key: string;
   }) => req<{ slug: string; url: string }>('/api/worlds', { method: 'POST', body: JSON.stringify(payload) }),
+
+  update: (
+    slug: string,
+    payload: {
+      title: string;
+      author: string;
+      data: string;
+      thumb: string | null;
+      stats: WorldStats;
+      key: string;
+    },
+  ) =>
+    req<{ slug: string; url: string; updated: boolean }>(`/api/worlds/${encodeURIComponent(slug)}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+
+  auth: (slug: string, key: string) =>
+    req<{ ok: boolean }>(`/api/worlds/${encodeURIComponent(slug)}/auth`, {
+      method: 'POST',
+      body: JSON.stringify({ key }),
+    }),
 
   health: () => req<{ ok: boolean; worlds: number }>('/api/health'),
 };

@@ -9,7 +9,7 @@
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import Database from 'better-sqlite3';
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import { readFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -57,9 +57,52 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_worlds_chaos   ON worlds(chaos DESC);
 `);
 
+/** Add a column if this database predates it (in-place schema migration). */
+function ensureColumn(table, column, definition) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all();
+  if (!cols.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}
+// Owner key: lets an author come back and update their world.
+ensureColumn('worlds', 'key_hash', "TEXT NOT NULL DEFAULT ''");
+ensureColumn('worlds', 'key_salt', "TEXT NOT NULL DEFAULT ''");
+ensureColumn('worlds', 'updated_at', 'INTEGER');
+
 // Per-deploy salt: IPs are only ever stored as unrecoverable hashes.
 const IP_SALT = process.env.IP_SALT || randomBytes(16).toString('hex');
 const hashIp = (ip) => createHash('sha256').update(IP_SALT + '|' + ip).digest('hex').slice(0, 32);
+
+/**
+ * Owner keys are never stored in plaintext: each world keeps a random salt and
+ * a scrypt hash, compared in constant time.
+ */
+const MIN_KEY_LEN = 6;
+const deriveKey = (key, salt) => scryptSync(String(key), salt, 32).toString('hex');
+
+function makeKeyRecord(key) {
+  const salt = randomBytes(16).toString('hex');
+  return { key_salt: salt, key_hash: deriveKey(key, salt) };
+}
+
+function keyMatches(row, key) {
+  if (!row?.key_hash || !row?.key_salt || !key) return false;
+  const expected = Buffer.from(row.key_hash, 'hex');
+  const actual = Buffer.from(deriveKey(key, row.key_salt), 'hex');
+  return expected.length === actual.length && timingSafeEqual(expected, actual);
+}
+
+/** Throttle key guesses per IP so owner keys can't be brute forced. */
+const authLog = new Map();
+const AUTH_LIMIT = 20;
+const AUTH_WINDOW_MS = 10 * 60 * 1000;
+function allowAuthAttempt(key) {
+  const now = Date.now();
+  const hits = (authLog.get(key) || []).filter((t) => now - t < AUTH_WINDOW_MS);
+  hits.push(now);
+  authLog.set(key, hits);
+  return hits.length <= AUTH_LIMIT;
+}
 
 // ---------------------------------------------------------------- validation
 
@@ -112,11 +155,14 @@ const rowToCard = (r) => ({
   views: r.views,
   likes: r.likes,
   createdAt: r.created_at,
+  updatedAt: r.updated_at ?? null,
   hasThumb: !!r.has_thumb,
+  editable: !!r.editable,
 });
 
 const LIST_COLS = `slug, title, author, bodies, total_mass, chaos, chaos_window, survivors,
-  escapees, first_collision, dynamical_time, views, likes, created_at, (thumb IS NOT NULL) AS has_thumb`;
+  escapees, first_collision, dynamical_time, views, likes, created_at, updated_at,
+  (thumb IS NOT NULL) AS has_thumb, (key_hash != '') AS editable`;
 
 const SORTS = {
   new: 'created_at DESC',
@@ -184,6 +230,10 @@ app.post('/api/worlds', async (req, reply) => {
   }
   const data = String(body.data || '');
   if (!data || data.length > MAX_DATA) return reply.code(400).send({ error: 'World data missing or too large.' });
+  const ownerKey = String(body.key || '');
+  if (ownerKey.length < MIN_KEY_LEN) {
+    return reply.code(400).send({ error: `Secret key must be at least ${MIN_KEY_LEN} characters.` });
+  }
 
   const ip = hashIp(clientIp(req));
   if (!allowPublish(ip)) return reply.code(429).send({ error: 'Too many worlds published from here — try again later.' });
@@ -194,12 +244,14 @@ app.post('/api/worlds', async (req, reply) => {
     if (buf.length && buf.length <= MAX_THUMB) thumb = buf;
   }
   const s = body.stats || {};
+  const keyRecord = makeKeyRecord(ownerKey);
   db.prepare(
     `INSERT INTO worlds (slug, title, author, data, thumb, bodies, total_mass, chaos, chaos_window,
-       survivors, escapees, first_collision, dynamical_time, created_at, ip_hash)
+       survivors, escapees, first_collision, dynamical_time, created_at, ip_hash, key_hash, key_salt)
      VALUES (@slug, @title, @author, @data, @thumb, @bodies, @total_mass, @chaos, @chaos_window,
-       @survivors, @escapees, @first_collision, @dynamical_time, @created_at, @ip_hash)`,
+       @survivors, @escapees, @first_collision, @dynamical_time, @created_at, @ip_hash, @key_hash, @key_salt)`,
   ).run({
+    ...keyRecord,
     slug,
     title: clean(body.title, 60) || slug,
     author: clean(body.author, 40),
@@ -217,6 +269,69 @@ app.post('/api/worlds', async (req, reply) => {
     ip_hash: ip,
   });
   return { slug, url: `${PUBLIC_URL}/@${slug}` };
+});
+
+/** Check an owner key without changing anything (unlocks the edit UI). */
+app.post('/api/worlds/:slug/auth', async (req, reply) => {
+  const slug = String(req.params.slug || '').toLowerCase();
+  const row = db.prepare('SELECT key_hash, key_salt FROM worlds WHERE slug = ?').get(slug);
+  if (!row) return reply.code(404).send({ error: 'not found' });
+  if (!allowAuthAttempt(hashIp(clientIp(req)))) {
+    return reply.code(429).send({ error: 'Too many attempts — wait a few minutes.' });
+  }
+  if (!row.key_hash) {
+    return reply.code(403).send({ error: 'This world was published without a secret key and cannot be edited.' });
+  }
+  if (!keyMatches(row, req.body?.key)) return reply.code(403).send({ error: 'That secret key does not match.' });
+  return { ok: true };
+});
+
+/** Update a world in place. Requires the owner key set at publish time. */
+app.put('/api/worlds/:slug', async (req, reply) => {
+  const slug = String(req.params.slug || '').toLowerCase();
+  const row = db.prepare('SELECT key_hash, key_salt FROM worlds WHERE slug = ?').get(slug);
+  if (!row) return reply.code(404).send({ error: 'not found' });
+  if (!allowAuthAttempt(hashIp(clientIp(req)))) {
+    return reply.code(429).send({ error: 'Too many attempts — wait a few minutes.' });
+  }
+  if (!row.key_hash) {
+    return reply.code(403).send({ error: 'This world was published without a secret key and cannot be edited.' });
+  }
+  const body = req.body || {};
+  if (!keyMatches(row, body.key)) return reply.code(403).send({ error: 'That secret key does not match.' });
+
+  const data = String(body.data || '');
+  if (!data || data.length > MAX_DATA) return reply.code(400).send({ error: 'World data missing or too large.' });
+
+  let thumb;
+  if (typeof body.thumb === 'string' && body.thumb.startsWith('data:image/jpeg;base64,')) {
+    const buf = Buffer.from(body.thumb.slice('data:image/jpeg;base64,'.length), 'base64');
+    if (buf.length && buf.length <= MAX_THUMB) thumb = buf;
+  }
+  const s = body.stats || {};
+  db.prepare(
+    `UPDATE worlds SET title = @title, author = @author, data = @data,
+       thumb = COALESCE(@thumb, thumb), bodies = @bodies, total_mass = @total_mass,
+       chaos = @chaos, chaos_window = @chaos_window, survivors = @survivors, escapees = @escapees,
+       first_collision = @first_collision, dynamical_time = @dynamical_time, updated_at = @updated_at
+     WHERE slug = @slug`,
+  ).run({
+    slug,
+    title: clean(body.title, 60) || slug,
+    author: clean(body.author, 40),
+    data,
+    thumb: thumb ?? null,
+    bodies: Math.round(num(s.bodies)),
+    total_mass: num(s.totalMass),
+    chaos: num(s.chaos),
+    chaos_window: num(s.chaosWindow),
+    survivors: Math.round(num(s.survivors)),
+    escapees: Math.round(num(s.escapees)),
+    first_collision: typeof s.firstCollision === 'number' && isFinite(s.firstCollision) ? s.firstCollision : null,
+    dynamical_time: num(s.dynamicalTime),
+    updated_at: Date.now(),
+  });
+  return { slug, url: `${PUBLIC_URL}/@${slug}`, updated: true };
 });
 
 app.get('/api/health', async () => ({

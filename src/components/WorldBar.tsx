@@ -10,7 +10,26 @@ export default function WorldBar() {
   const liked = useStore((s) => s.worldLiked);
   const loading = useStore((s) => s.worldLoading);
   const error = useStore((s) => s.worldError);
+  const unlocked = useStore((s) => s.worldUnlocked);
   const [toast, setToast] = useState('');
+  const [askKey, setAskKey] = useState(false);
+  const [keyInput, setKeyInput] = useState('');
+  const [keyError, setKeyError] = useState('');
+  const [checking, setChecking] = useState(false);
+
+  const tryUnlock = async () => {
+    setChecking(true);
+    setKeyError('');
+    try {
+      await actions.unlockWorld(keyInput.trim());
+      setAskKey(false);
+      setKeyInput('');
+    } catch (err) {
+      setKeyError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setChecking(false);
+    }
+  };
 
   if (loading) return <div className="world-bar"><span className="hint">loading world…</span></div>;
 
@@ -74,6 +93,20 @@ export default function WorldBar() {
         >
           ↗ Share
         </button>
+        {rec.editable && unlocked && (
+          <button
+            className="btn btn-sm btn-primary"
+            onClick={() => actions.setPublishOpen(true, 'update')}
+            title="Save the current arrangement over this world"
+          >
+            ✎ Update
+          </button>
+        )}
+        {rec.editable && !unlocked && (
+          <button className="btn btn-sm" onClick={() => setAskKey(true)} title="Enter the secret key you saved">
+            🔑 I own this
+          </button>
+        )}
         <button className="btn btn-sm" onClick={actions.remixWorld} title="Fork this world and keep playing">
           ⑂ Remix
         </button>
@@ -82,6 +115,30 @@ export default function WorldBar() {
         </button>
         {toast && <span className="chip chip-var">{toast}</span>}
       </div>
+      {askKey && (
+        <div className="key-prompt">
+          <input
+            autoFocus
+            type="text"
+            spellCheck={false}
+            value={keyInput}
+            placeholder="secret key for this world"
+            onChange={(e) => {
+              setKeyInput(e.target.value);
+              setKeyError('');
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') void tryUnlock();
+              if (e.key === 'Escape') setAskKey(false);
+            }}
+          />
+          <button className="btn btn-sm btn-primary" disabled={checking || !keyInput.trim()} onClick={tryUnlock}>
+            {checking ? 'checking…' : 'Unlock'}
+          </button>
+          <button className="btn btn-sm" onClick={() => setAskKey(false)}>Cancel</button>
+          {keyError && <span className="warn-text">{keyError}</span>}
+        </div>
+      )}
     </div>
   );
 }
