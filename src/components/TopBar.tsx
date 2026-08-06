@@ -7,6 +7,7 @@ import { fmtTime } from '../ui/units';
 import { isRecording, shareApp, startRecording, stopRecording, takeScreenshot } from '../ui/capture';
 import { currentTrack, setTrack, type TrackId } from '../ui/music';
 import AccountMenu from './AccountMenu';
+import { ThemeToggle, UniversePicker } from './ThemeControls';
 
 const TRACK_BUTTONS: Array<{ id: TrackId; label: string; hint: string }> = [
   { id: 'off', label: 'Off', hint: 'No music' },
@@ -133,6 +134,8 @@ function SandboxBar() {
         </button>
         <CaptureButtons />
         <MusicPicker />
+        <UniversePicker />
+        <ThemeToggle />
         <AccountMenu />
       </div>
       <label className="ctl ctl-inline">
@@ -224,8 +227,16 @@ export default function TopBar() {
           ☰ Worlds
         </button>
         <MusicPicker />
+        <UniversePicker />
+        <ThemeToggle />
+        <AccountMenu />
         {preset?.variation && (
-          <button className="btn btn-var" onClick={actions.applyVariation} title={preset.variation.label}>
+          <button
+            className="btn btn-var"
+            onClick={actions.applyVariation}
+            data-tip-title="Vary"
+            data-tip={`Re-runs this scenario with one variable changed: ${preset.variation.label}. The best way to see how sensitive an encounter is.`}
+          >
             ⑂ Vary
           </button>
         )}

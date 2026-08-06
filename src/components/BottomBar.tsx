@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useStore, actions } from '../state/store';
+import { useTheme } from '../state/theme';
 import { fmtTime } from '../ui/units';
 
 function LineChart({
@@ -31,7 +32,7 @@ function LineChart({
     <div className="chart">
       <div className="chart-title" data-tip-title={title} data-tip={title === 'Energy' ? 'Kinetic and potential energy trading back and forth while their sum stays flat — that flat green line is energy conservation.' : 'How far total energy and angular momentum have drifted from their starting values. This is numerical error, not physics.'}>{title} <em>{unit}</em></div>
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" preserveAspectRatio="none">
-        <rect x={0} y={0} width={W} height={H} fill="#070b14" rx={4} />
+        <rect x={0} y={0} width={W} height={H} fill="var(--chart-bg)" rx={4} />
         {paths.map((p) => p.d && <path key={p.label} d={p.d} fill="none" stroke={p.color} strokeWidth={1.4} />)}
       </svg>
       <div className="legend">
@@ -48,14 +49,20 @@ export default function BottomBar() {
   const history = useStore((s) => s.history);
   const collisions = useStore((s) => s.collisions);
 
+  // Series colours are tuned per skin: the pale dark-mode hues wash out on white.
+  const light = useTheme((s) => s.theme) === 'light';
+  const c = light
+    ? { k: '#0b6fa4', u: '#b1560b', e: '#0f7a3d', dE: '#c22a5e', dL: '#6b3fb8' }
+    : { k: '#63d0ff', u: '#ff9d63', e: '#9dffb0', dE: '#ff6d9a', dL: '#c9a2ff' };
+
   const energySeries = [
-    { label: 'kinetic ΣK', color: '#63d0ff', values: seriesData.map((p) => p.K) },
-    { label: 'potential ΣU', color: '#ff9d63', values: seriesData.map((p) => p.U) },
-    { label: 'total E', color: '#9dffb0', values: seriesData.map((p) => p.E) },
+    { label: 'kinetic ΣK', color: c.k, values: seriesData.map((p) => p.K) },
+    { label: 'potential ΣU', color: c.u, values: seriesData.map((p) => p.U) },
+    { label: 'total E', color: c.e, values: seriesData.map((p) => p.E) },
   ];
   const driftSeries = [
-    { label: 'ΔE/E₀', color: '#ff6d9a', values: seriesData.map((p) => p.driftE) },
-    { label: 'Δ|L|/|L₀|', color: '#c9a2ff', values: seriesData.map((p) => p.driftL) },
+    { label: 'ΔE/E₀', color: c.dE, values: seriesData.map((p) => p.driftE) },
+    { label: 'Δ|L|/|L₀|', color: c.dL, values: seriesData.map((p) => p.driftL) },
   ];
 
   return (

@@ -10,6 +10,8 @@ import { pairOrbit } from '../physics/orbital';
 import { dropFromHold, makeDrop, MAX_HOLD_SEC } from '../physics/drops';
 import { fmtMass, fmtSpeed } from '../ui/units';
 import { registerRenderCapture } from '../ui/capture';
+import { useTheme } from '../state/theme';
+import { getUniverse, trailColorFor } from '../ui/universe';
 import type { Vec3 } from '../physics/types';
 
 /** Physics XY plane is drawn horizontal: (x,y,z)_phys → (x, z, -y)_three. */
@@ -295,6 +297,7 @@ function Trails() {
   const frame = useStore((s) => s.frame);
   const sceneScale = useStore((s) => s.sceneScale);
   const trailLength = useStore((s) => s.config.trailLength);
+  const scheme = getUniverse(useTheme((s) => s.universe));
 
   const trails = useMemo(() => {
     const out: { id: string; color: string; points: [number, number, number][] }[] = [];
@@ -332,15 +335,15 @@ function Trails() {
         const t = computeFrameTransform(frame, e.specs.map((x) => x.id), pos, vel, mass, cp, cv);
         pts.push(physToScene(toFramePos(b.position, t), sceneScale));
       }
-      if (pts.length >= 2) out.push({ id: spec.id, color: spec.color, points: pts });
+      if (pts.length >= 2) out.push({ id: spec.id, color: trailColorFor(spec.color, scheme), points: pts });
     }
     return out;
-  }, [history, liveSpecs, frame, sceneScale, trailLength]);
+  }, [history, liveSpecs, frame, sceneScale, trailLength, scheme]);
 
   return (
     <>
       {trails.map((t) => (
-        <Line key={t.id} points={t.points} color={t.color} lineWidth={1.2} transparent opacity={0.55} />
+        <Line key={t.id} points={t.points} color={t.color} lineWidth={1.2} transparent opacity={scheme.trailOpacity} />
       ))}
     </>
   );
@@ -350,6 +353,7 @@ function Trails() {
 
 function ComMarker() {
   const show = useStore((s) => s.config.showCom);
+  const scheme = getUniverse(useTheme((s) => s.universe));
   const sceneScale = useStore((s) => s.sceneScale);
   const ref = useRef<THREE.Group>(null);
   useFrame(() => {
@@ -365,7 +369,7 @@ function ComMarker() {
     <group ref={ref}>
       <mesh>
         <sphereGeometry args={[0.06, 8, 8]} />
-        <meshBasicMaterial color="#ffffff" />
+        <meshBasicMaterial color={scheme.com} />
       </mesh>
       <Html distanceFactor={26} position={[0, 0.2, 0]} style={{ pointerEvents: 'none' }}>
         <div className="body-label com-label">⊕ center of mass</div>
@@ -376,6 +380,7 @@ function ComMarker() {
 
 function ClosestApproachMarker() {
   const enc = useStore((s) => s.encounterLive);
+  const scheme = getUniverse(useTheme((s) => s.universe));
   const frame = useStore((s) => s.frame);
   const sceneScale = useStore((s) => s.sceneScale);
   const liveTick = useStore((s) => s.liveTick);
@@ -388,10 +393,10 @@ function ClosestApproachMarker() {
   const b = physToScene(toFramePos(enc.posB, t), sceneScale);
   return (
     <group>
-      <Line points={[a, b]} color="#ffe066" lineWidth={1} dashed dashSize={0.1} gapSize={0.08} />
+      <Line points={[a, b]} color={scheme.closestApproach} lineWidth={1} dashed dashSize={0.1} gapSize={0.08} />
       <mesh position={[(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2]}>
         <octahedronGeometry args={[0.09]} />
-        <meshBasicMaterial color="#ffe066" />
+        <meshBasicMaterial color={scheme.closestApproach} />
       </mesh>
     </group>
   );
@@ -400,6 +405,7 @@ function ClosestApproachMarker() {
 /** Incoming/outgoing asymptotes of the featured pair's osculating hyperbola, drawn about the pair COM. */
 function Asymptotes() {
   const pair = useStore((s) => s.pairSel);
+  const scheme = getUniverse(useTheme((s) => s.universe));
   const liveTick = useStore((s) => s.liveTick);
   const sceneScale = useStore((s) => s.sceneScale);
   void liveTick;
@@ -451,8 +457,8 @@ function Asymptotes() {
   const d2 = mkDir(-1);
   return (
     <group position={c}>
-      <Line points={[[0, 0, 0], d1]} color="#8899bb" lineWidth={0.8} dashed dashSize={0.25} gapSize={0.2} />
-      <Line points={[[0, 0, 0], d2]} color="#8899bb" lineWidth={0.8} dashed dashSize={0.25} gapSize={0.2} />
+      <Line points={[[0, 0, 0], d1]} color={scheme.asymptote} lineWidth={0.8} dashed dashSize={0.25} gapSize={0.2} />
+      <Line points={[[0, 0, 0], d2]} color={scheme.asymptote} lineWidth={0.8} dashed dashSize={0.25} gapSize={0.2} />
     </group>
   );
 }
@@ -639,6 +645,7 @@ function SandboxSpawner() {
   const mode = useStore((s) => s.mode);
   const sceneScale = useStore((s) => s.sceneScale);
   const radiusScale = useStore((s) => s.config.radiusScale);
+  const scheme = getUniverse(useTheme((s) => s.universe));
   const { camera, gl, controls } = useThree();
   const stateRef = useRef<{ start: number; pos: THREE.Vector3; cur: THREE.Vector3 } | null>(null);
   const [drag, setDrag] = useState<null | { pos: [number, number, number]; cur: [number, number, number]; hold: number }>(null);
@@ -720,10 +727,10 @@ function SandboxSpawner() {
         </mesh>
         <mesh position={drag.pos} rotation={[-Math.PI / 2, 0, 0]}>
           <ringGeometry args={[visR * 1.25, visR * 1.32, 48]} />
-          <meshBasicMaterial color="#ffffff" transparent opacity={0.5} side={THREE.DoubleSide} />
+          <meshBasicMaterial color={scheme.dropGuide} transparent opacity={0.5} side={THREE.DoubleSide} />
         </mesh>
         {speed > 100 && (
-          <Line points={[drag.pos, drag.cur]} color="#ffffff" lineWidth={1.6} dashed dashSize={0.16} gapSize={0.1} />
+          <Line points={[drag.pos, drag.cur]} color={scheme.dropGuide} lineWidth={1.6} dashed dashSize={0.16} gapSize={0.1} />
         )}
         <Html position={drag.pos} distanceFactor={30} style={{ pointerEvents: 'none' }}>
           <div className="drop-label">
@@ -763,6 +770,7 @@ function SandboxSpawner() {
  */
 function CaptureBridge() {
   const { gl, scene, camera } = useThree();
+  const scheme = getUniverse(useTheme((s) => s.universe));
   useEffect(() => {
     registerRenderCapture((mime, quality, maxWidth) => {
       try {
@@ -777,7 +785,7 @@ function CaptureBridge() {
         const ctx = off.getContext('2d');
         if (!ctx) return null;
         // JPEG has no alpha: paint the space background first
-        ctx.fillStyle = '#04060c';
+        ctx.fillStyle = scheme.void;
         ctx.fillRect(0, 0, off.width, off.height);
         // Downscaled previews (leaderboard cards) lose thin trails against
         // black space, so lift them. Full-size screenshots stay untouched.
@@ -790,7 +798,7 @@ function CaptureBridge() {
       }
     });
     return () => registerRenderCapture(null);
-  }, [gl, scene, camera]);
+  }, [gl, scene, camera, scheme]);
   return null;
 }
 
@@ -809,20 +817,21 @@ function CameraRig() {
 
 export default function Scene() {
   const showGrid = useStore((s) => s.config.showGrid);
+  const scheme = getUniverse(useTheme((s) => s.universe));
   return (
     <Canvas
       dpr={[1, 2]}
       gl={{ antialias: true, logarithmicDepthBuffer: true, preserveDrawingBuffer: true }}
       camera={{ fov: 45, near: 0.01, far: 5000 }}
-      style={{ background: '#04060c' }}
+      style={{ background: scheme.void }}
       onPointerMissed={() => actions.select(null)}
     >
-      <color attach="background" args={['#04060c']} />
-      <ambientLight intensity={0.35} />
-      <pointLight position={[0, 40, 0]} intensity={1.2} decay={0} />
-      <Stars />
+      <color attach="background" args={[scheme.void]} />
+      <ambientLight intensity={scheme.ambient} />
+      <pointLight position={[0, 40, 0]} intensity={scheme.keyLight} decay={0} />
+      <Stars scheme={scheme} />
       {showGrid && (
-        <gridHelper args={[80, 40, '#1b2740', '#0e1524']} position={[0, -0.001, 0]} />
+        <gridHelper args={[80, 40, scheme.gridMajor, scheme.gridMinor]} position={[0, -0.001, 0]} />
       )}
       <SandboxSpawner />
       <BodiesLayer />
@@ -839,7 +848,7 @@ export default function Scene() {
 }
 
 /** Static, subtle starfield (decorative only — infinitely far, no physics). */
-function Stars() {
+function Stars({ scheme }: { scheme: ReturnType<typeof getUniverse> }) {
   const geo = useMemo(() => {
     const g = new THREE.BufferGeometry();
     const N = 1200;
@@ -857,9 +866,10 @@ function Stars() {
     g.setAttribute('position', new THREE.BufferAttribute(arr, 3));
     return g;
   }, []);
+  if (!scheme.stars) return null;
   return (
     <points geometry={geo}>
-      <pointsMaterial size={1.4} sizeAttenuation={false} color="#3a4763" />
+      <pointsMaterial size={scheme.starSize} sizeAttenuation={false} color={scheme.stars} />
     </points>
   );
 }
