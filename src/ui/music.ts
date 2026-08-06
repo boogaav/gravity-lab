@@ -182,7 +182,14 @@ function tick(): void {
   }
 }
 
+/** Installed by the Spotify layer so the two sources never overlap. */
+let pauseSpotifyIfPlaying: (() => void) | null = null;
+export function setSpotifyPauser(fn: (() => void) | null): void {
+  pauseSpotifyIfPlaying = fn;
+}
+
 export function setTrack(id: TrackId): void {
+  if (id !== 'off') pauseSpotifyIfPlaying?.();
   if (id === current) return;
   const c = ensureAudio();
   void c.resume(); // called from a user gesture

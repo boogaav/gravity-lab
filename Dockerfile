@@ -9,6 +9,9 @@ COPY src ./src
 # Empty means accounts are disabled and the SDK is never even downloaded.
 ARG VITE_PRIVY_APP_ID=""
 ENV VITE_PRIVY_APP_ID=$VITE_PRIVY_APP_ID
+# Spotify client id is a public identifier too; empty disables the integration.
+ARG VITE_SPOTIFY_CLIENT_ID=""
+ENV VITE_SPOTIFY_CLIENT_ID=$VITE_SPOTIFY_CLIENT_ID
 RUN npx vite build --base=/
 
 # ---- runtime: API + static ----

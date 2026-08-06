@@ -8,6 +8,7 @@ import { isRecording, shareApp, startRecording, stopRecording, takeScreenshot } 
 import { currentTrack, setTrack, type TrackId } from '../ui/music';
 import AccountMenu from './AccountMenu';
 import { ThemeToggle, UniversePicker } from './ThemeControls';
+import SpotifyControls from './SpotifyControls';
 
 const TRACK_BUTTONS: Array<{ id: TrackId; label: string; hint: string }> = [
   { id: 'off', label: 'Off', hint: 'No music' },
@@ -134,6 +135,7 @@ function SandboxBar() {
         </button>
         <CaptureButtons />
         <MusicPicker />
+        <SpotifyControls />
         <UniversePicker />
         <ThemeToggle />
         <AccountMenu />
@@ -227,6 +229,7 @@ export default function TopBar() {
           ☰ Worlds
         </button>
         <MusicPicker />
+        <SpotifyControls />
         <UniversePicker />
         <ThemeToggle />
         <AccountMenu />

@@ -409,6 +409,43 @@ input[type="color"] { width: 28px; height: 24px; padding: 0; border: none; backg
 }
 .com-label { color: #ffffff; opacity: 0.8; }
 
+/* ---------- spotify ---------- */
+.spotify-wrap { position: relative; }
+.btn-spotify { border-color: #1db954; color: #1db954; }
+.spotify-pop {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 70;
+  background: var(--panel); border: 1px solid var(--panel-edge); border-radius: 10px;
+  padding: 10px; width: min(320px, calc(100vw - 24px));
+  max-height: 72vh; overflow-y: auto;
+  box-shadow: 0 12px 34px var(--shadow);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.spotify-note { border-left: 2px solid var(--warn); padding-left: 8px; }
+.spotify-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.spotify-now { display: flex; gap: 8px; align-items: center; }
+.spotify-now img { width: 40px; height: 40px; border-radius: 5px; object-fit: cover; }
+.spotify-now-text { display: flex; flex-direction: column; min-width: 0; }
+.spotify-now-text b { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.spotify-now-text em { font-style: normal; font-size: 10px; color: var(--ink-dim); }
+.spotify-transport { display: flex; gap: 5px; align-items: center; }
+.spotify-transport input[type='range'] { flex: 1; min-width: 60px; }
+.spotify-lists { display: flex; flex-direction: column; gap: 2px; max-height: 250px; overflow-y: auto; }
+.spotify-item {
+  display: flex; gap: 8px; align-items: center; text-align: left;
+  background: none; border: 1px solid transparent; border-radius: 7px;
+  padding: 5px 6px; cursor: pointer; color: var(--ink); font: inherit;
+}
+.spotify-item:hover { background: var(--surface-2); border-color: var(--panel-edge); }
+.spotify-thumb {
+  flex: 0 0 auto; width: 30px; height: 30px; border-radius: 4px;
+  background: var(--surface-2); object-fit: cover;
+  display: flex; align-items: center; justify-content: center; color: var(--ink-dim);
+}
+.spotify-liked { color: #1db954; }
+.spotify-item-text { display: flex; flex-direction: column; min-width: 0; }
+.spotify-item-text b { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.spotify-item-text em { font-style: normal; font-size: 10px; color: var(--ink-dim); }
+
 /* ---------- universe picker ---------- */
 .universe-wrap { position: relative; }
 .universe-swatch {
