@@ -1,6 +1,6 @@
 # Gravity Lab
 
-**Live: https://gravitylab.booga.me**
+**Live: https://gravity.booga.me**
 
 An interactive, scientifically honest 3D gravitational N-body simulator for exploring
 close encounters: flybys, gravity assists, binary disruption, chaotic three-body motion,
@@ -238,7 +238,7 @@ tests/          Vitest entries (physics validation + codec/analyzer)
 
 Deployment: a single Fly.io app (`fly.toml`, `Dockerfile`) serving both the static build
 and the API, with SQLite on a mounted volume at `/data`. It answers on both
-`gravitylab.booga.me` and `gravity-lab.fly.dev`; links and OpenGraph tags are built from
+`gravity.booga.me` and `gravity-lab.fly.dev`; links and OpenGraph tags are built from
 the request's own host (allowlisted), so both are correct simultaneously.
 Stack: TypeScript, React 18, Three.js via React-Three-Fiber, zustand, Vite, Vitest.
 Charts are hand-rolled SVG. No physics library is used; the integrator is ~40 lines and

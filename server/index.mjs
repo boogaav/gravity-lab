@@ -20,7 +20,7 @@ const ROOT = join(__dirname, '..');
 const PUBLIC_DIR = join(ROOT, 'dist');
 const DATA_DIR = process.env.DATA_DIR || (existsSync('/data') ? '/data' : join(ROOT, '.data'));
 const PORT = Number(process.env.PORT || 8080);
-const PUBLIC_URL = process.env.PUBLIC_URL || 'https://gravitylab.booga.me';
+const PUBLIC_URL = process.env.PUBLIC_URL || 'https://gravity.booga.me';
 
 /**
  * Hosts this deployment answers on. Requests arriving on any of them get links
@@ -31,6 +31,8 @@ const PUBLIC_URL = process.env.PUBLIC_URL || 'https://gravitylab.booga.me';
  */
 const KNOWN_HOSTS = new Set(
   [
+    'gravity.booga.me',
+    // previous name, kept so links shared under it keep resolving correctly
     'gravitylab.booga.me',
     'gravity-lab.fly.dev',
     ...(process.env.EXTRA_HOSTS || '').split(',').map((h) => h.trim()).filter(Boolean),

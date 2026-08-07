@@ -6,7 +6,7 @@ import { accessToken } from './authToken';
  * static host (GitHub Pages) the API lives on the canonical deployment, so
  * shared links and the leaderboard keep working from either origin.
  */
-const CANONICAL_API = 'https://gravitylab.booga.me';
+const CANONICAL_API = 'https://gravity.booga.me';
 
 export const API_BASE = (() => {
   if (typeof location === 'undefined') return CANONICAL_API;
