@@ -10,8 +10,7 @@ import PublishDialog from './components/PublishDialog';
 import WorldBar from './components/WorldBar';
 import Tooltip from './components/Tooltip';
 import { useStore, actions } from './state/store';
-import { completeSpotifyLogin, initSpotify, playback } from './ui/spotify';
-import { setSpotifyPauser } from './ui/music';
+import { completeSpotifyLogin, initSpotify } from './ui/spotify';
 
 export default function App() {
   const presetId = useStore((s) => s.presetId);
@@ -26,7 +25,6 @@ export default function App() {
       actions.setConfig({ radiusScale: 10, showLabels: false, showVelocity: false, showCom: false, trailLength: 800 });
       actions.select(null);
       // Spotify may be returning us here with an authorisation code.
-      setSpotifyPauser(() => void playback.stop());
       if (!(await completeSpotifyLogin())) void initSpotify();
       // A URL may carry a world: /@slug from the registry, or #w=… encoded inline.
       const handled = await actions.bootRouting();

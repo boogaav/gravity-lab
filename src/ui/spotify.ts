@@ -9,7 +9,7 @@
  *   • in-browser playback requires a Spotify **Premium** account;
  *   • while the Spotify app is in development mode only allowlisted accounts
  *     can authorise it.
- * When either bites, the app falls back to its own generated piano tracks.
+ * When either bites, the UI says so plainly rather than failing silently.
  */
 import { create } from 'zustand';
 
@@ -245,7 +245,7 @@ async function loadProfileAndPlaylists(): Promise<void> {
     error:
       me.product === 'premium'
         ? null
-        : 'Spotify only allows in-browser playback for Premium accounts — the generated tracks stay available.',
+        : 'Spotify only allows in-browser playback for Premium accounts.',
   });
   const lists = await api<any>('/me/playlists?limit=50').catch(() => null);
   if (lists?.items) {
@@ -330,7 +330,7 @@ async function startPlayer(): Promise<void> {
     useSpotify.setState({
       premium: false,
       ready: false,
-      error: 'Spotify in-browser playback requires Premium. The generated tracks still work.',
+      error: 'Spotify in-browser playback requires Premium.',
     }),
   );
   player.addListener('playback_error', fail('Playback error'));

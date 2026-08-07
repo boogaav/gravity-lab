@@ -409,6 +409,37 @@ input[type="color"] { width: 28px; height: 24px; padding: 0; border: none; backg
 }
 .com-label { color: #ffffff; opacity: 0.8; }
 
+/* ---------- toolbar menus ---------- */
+.tools { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.menu-wrap { position: relative; }
+.menu-btn { display: inline-flex; align-items: center; gap: 5px; }
+.menu-btn.open { border-color: var(--accent); color: var(--accent); }
+.menu-caret { font-size: 9px; opacity: 0.6; }
+.menu-pop {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 70;
+  background: var(--panel); border: 1px solid var(--panel-edge); border-radius: 10px;
+  padding: 7px; width: min(280px, calc(100vw - 24px));
+  max-height: 72vh; overflow-y: auto;
+  box-shadow: 0 12px 34px var(--shadow);
+  display: flex; flex-direction: column; gap: 3px;
+}
+.menu-label {
+  font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--ink-dim); padding: 6px 6px 2px;
+}
+.menu-item {
+  display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
+  background: none; border: 1px solid transparent; border-radius: 7px;
+  padding: 7px 8px; cursor: pointer; color: var(--ink); font: inherit;
+}
+.menu-item:hover { background: var(--surface-2); border-color: var(--panel-edge); }
+.menu-item.danger { color: var(--danger); }
+.menu-row { display: flex; gap: 6px; align-items: center; padding: 2px 4px; }
+.theme-rocker { display: flex; gap: 4px; padding: 2px 4px 6px; }
+.theme-rocker .btn { flex: 1; }
+.rec-live { color: var(--danger); animation: rec-pulse 1.2s ease-in-out infinite; }
+.universe-list { display: flex; flex-direction: column; gap: 2px; }
+
 /* ---------- spotify ---------- */
 .spotify-wrap { position: relative; }
 .btn-spotify { border-color: #1db954; color: #1db954; }

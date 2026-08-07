@@ -7,11 +7,10 @@ import {
   spotifyConfigured,
   useSpotify,
 } from '../ui/spotify';
-import { setTrack } from '../ui/music';
 
 /**
- * Spotify soundtrack control. Renders nothing unless this deployment has a
- * Spotify client id, so the generated tracks remain the whole story otherwise.
+ * Music control. Spotify is the only soundtrack source; the menu renders
+ * nothing unless this deployment has a Spotify client id configured.
  */
 export default function SpotifyControls() {
   if (!spotifyConfigured()) return null;
@@ -38,15 +37,12 @@ function SpotifyMenu() {
   }, [open]);
 
   const label = s.nowPlaying
-    ? s.nowPlaying.title.length > 18
-      ? `${s.nowPlaying.title.slice(0, 17)}…`
+    ? s.nowPlaying.title.length > 16
+      ? `${s.nowPlaying.title.slice(0, 15)}…`
       : s.nowPlaying.title
-    : s.connected
-      ? s.displayName || 'Spotify'
-      : 'Spotify';
+    : 'Music';
 
   const start = async (uri: string | null) => {
-    setTrack('off'); // the generated piano and Spotify never play together
     await playContext(uri);
   };
 
@@ -56,7 +52,7 @@ function SpotifyMenu() {
         className={`btn ${s.connected ? 'btn-spotify' : ''}`}
         onClick={() => setOpen((v) => !v)}
         data-tip-title="Spotify"
-        data-tip="Play your own Spotify playlists instead of the built-in piano tracks. Requires a Spotify Premium account — Spotify does not allow in-browser playback on free accounts."
+        data-tip="Score your worlds with your own Spotify playlists. Requires a Spotify Premium account — Spotify does not permit in-browser playback on free accounts."
       >
         ♫ {label}
       </button>
@@ -69,8 +65,8 @@ function SpotifyMenu() {
                 Spotify Connect device.
               </p>
               <p className="hint spotify-note">
-                Spotify requires a <b>Premium</b> account for in-browser playback. Free accounts can connect,
-                but the built-in tracks will keep playing instead.
+                Spotify only permits in-browser playback for <b>Premium</b> accounts. Free accounts can connect
+                and browse, but playback will not start.
               </p>
               <button className="btn btn-primary" disabled={s.connecting} onClick={connectSpotify}>
                 {s.connecting ? 'connecting…' : '♫ Connect Spotify'}

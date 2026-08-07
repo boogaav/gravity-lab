@@ -13,11 +13,9 @@ const UNIVERSE_KEY = 'gravity-lab-universe';
 function readTheme(): UiTheme {
   if (typeof localStorage === 'undefined') return 'dark';
   const stored = localStorage.getItem(THEME_KEY);
-  if (stored === 'light' || stored === 'dark') return stored;
-  // fall back to the OS preference on first visit
-  return typeof matchMedia !== 'undefined' && matchMedia('(prefers-color-scheme: light)').matches
-    ? 'light'
-    : 'dark';
+  // Dark is the product's default look; the OS preference is deliberately not
+  // consulted, so first-time visitors always see the intended dark space.
+  return stored === 'light' ? 'light' : 'dark';
 }
 
 function readUniverse(): UniverseId {
