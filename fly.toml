@@ -6,7 +6,7 @@ primary_region = "sin"
 
 [env]
   PORT = "8080"
-  PUBLIC_URL = "https://gravity-lab.fly.dev"
+  PUBLIC_URL = "https://gravitylab.booga.me"
 
 [[mounts]]
   source = "gravity_data"

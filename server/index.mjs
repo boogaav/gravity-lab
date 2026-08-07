@@ -20,7 +20,33 @@ const ROOT = join(__dirname, '..');
 const PUBLIC_DIR = join(ROOT, 'dist');
 const DATA_DIR = process.env.DATA_DIR || (existsSync('/data') ? '/data' : join(ROOT, '.data'));
 const PORT = Number(process.env.PORT || 8080);
-const PUBLIC_URL = process.env.PUBLIC_URL || 'https://gravity-lab.fly.dev';
+const PUBLIC_URL = process.env.PUBLIC_URL || 'https://gravitylab.booga.me';
+
+/**
+ * Hosts this deployment answers on. Requests arriving on any of them get links
+ * and OpenGraph tags built for that same host, so the app is correct on the
+ * custom domain and the fly.dev name simultaneously — no cutover moment.
+ * The allowlist matters: `Host` is attacker-controlled, and these values end up
+ * inside meta tags and shared URLs.
+ */
+const KNOWN_HOSTS = new Set(
+  [
+    'gravitylab.booga.me',
+    'gravity-lab.fly.dev',
+    ...(process.env.EXTRA_HOSTS || '').split(',').map((h) => h.trim()).filter(Boolean),
+  ].map((h) => h.toLowerCase()),
+);
+
+function publicUrlFor(req) {
+  const host = String(req?.headers?.host || '').toLowerCase();
+  if (KNOWN_HOSTS.has(host)) {
+    const proto = String(req.headers['x-forwarded-proto'] || 'https').split(',')[0];
+    return `${proto}://${host}`;
+  }
+  // localhost (any port) is handy for development
+  if (/^localhost(:\d+)?$/.test(host) || /^127\.0\.0\.1(:\d+)?$/.test(host)) return `http://${host}`;
+  return PUBLIC_URL;
+}
 
 mkdirSync(DATA_DIR, { recursive: true });
 
@@ -336,7 +362,7 @@ app.post('/api/worlds', async (req, reply) => {
     created_at: Date.now(),
     ip_hash: ip,
   });
-  return { slug, url: `${PUBLIC_URL}/@${slug}`, owner: publicUser(me) };
+  return { slug, url: `${publicUrlFor(req)}/@${slug}`, owner: publicUser(me) };
 });
 
 /**
@@ -410,7 +436,7 @@ app.put('/api/worlds/:slug', async (req, reply) => {
     dynamical_time: num(s.dynamicalTime),
     updated_at: Date.now(),
   });
-  return { slug, url: `${PUBLIC_URL}/@${slug}`, updated: true };
+  return { slug, url: `${publicUrlFor(req)}/@${slug}`, updated: true };
 });
 
 /** Delete a world. Requires the owner key; irreversible. */
@@ -529,11 +555,11 @@ function worldDescription(r) {
 }
 
 /** Inject per-world OpenGraph/Twitter tags so shared /@slug links preview well. */
-function renderWorldPage(row) {
+function renderWorldPage(row, base) {
   const title = `${row.title} — Gravity Lab`;
   const desc = worldDescription(row);
-  const url = `${PUBLIC_URL}/@${row.slug}`;
-  const img = row.has_thumb ? `${PUBLIC_URL}/api/worlds/${row.slug}/thumb.jpg` : `${PUBLIC_URL}/og-default.png`;
+  const url = `${base}/@${row.slug}`;
+  const img = row.has_thumb ? `${base}/api/worlds/${row.slug}/thumb.jpg` : `${base}/og-default.png`;
   const tags = `
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Gravity Lab" />
@@ -556,7 +582,7 @@ app.setNotFoundHandler(async (req, reply) => {
   const m = /^\/@([a-z0-9-]{2,32})(?:[/?#]|$)/i.exec(req.url);
   if (m) {
     const row = db.prepare(`SELECT ${LIST_COLS} ${FROM_WORLDS} WHERE w.slug = ?`).get(m[1].toLowerCase());
-    if (row) return reply.type('text/html').send(renderWorldPage(row));
+    if (row) return reply.type('text/html').send(renderWorldPage(row, publicUrlFor(req)));
   }
   return reply.type('text/html').send(indexHtml());
 });
